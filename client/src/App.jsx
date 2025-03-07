@@ -8,23 +8,19 @@ import Student from "./pages/student.jsx";
 import Teacher from "./pages/teacher.jsx";
 
 function App() {
-  // Function to check if user is authenticated from cookies
+  // Function to check if user is authenticated from localStorage
   const isAuthenticated = () => {
-    return document.cookie.includes('token');
+    return localStorage.getItem('token') !== null;
   };
 
   const getUserRole = () => {
-    // Get role from sessionStorage (will be set during login)
-    console.log(sessionStorage.getItem('userRole'));
-    return sessionStorage.getItem('userRole');
+    // Get role from localStorage (will be set during login)
+    console.log(localStorage.getItem('userRole'));
+    return localStorage.getItem('userRole');
   };
 
   // Protected Route component
   const ProtectedRoute = ({ children }) => {
-    // if (!isAuthenticated()) {
-    //   return <Navigate to="/login" />;
-    // }
-    
     const role = getUserRole();
     if (!role) {
       return <Navigate to="/login" />;

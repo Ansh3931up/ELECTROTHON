@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import axios from "axios";
 
 import { loginUser } from "../redux/slices/authSlice";
 
 const Login = () => {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { loading, error } = useSelector((state) => state.auth);
   const [redirectTo, setRedirectTo] = useState(null);
 
@@ -20,20 +21,22 @@ const Login = () => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-
   const handleSubmit = (e) => {
+    console.log("Form Data:", formData); // Log form data
     e.preventDefault();
+
     dispatch(loginUser(formData)).then((result) => {
       if (result.meta.requestStatus === "fulfilled") {
         const userRole = result.payload.role;
-        console.log('Full Response:', result.payload);
+        console.log('Full Response:', result.payload); // Log full response
         
-        // Force redirect after setting session storage
-        sessionStorage.setItem('userRole', userRole);
+        // Force redirect after setting localStorage
+        localStorage.setItem('userRole', userRole);
+        localStorage.setItem('token', result.payload.token);
         window.location.href = userRole === "teacher" ? "/teacher" : "/student";
       }
     }).catch((error) => {
-      console.error('Login error:', error);
+      console.error('Login error:', error); // Log error
     });
   };
 
@@ -97,6 +100,9 @@ const Login = () => {
 
         <button type="submit" disabled={loading} className="btn">
           {loading ? "Logging in..." : "Login"}
+        </button>
+        <button type="button" onClick={() => navigate(-1)} className="btn ml-4">
+          Back
         </button>
       </form>
     </div>
