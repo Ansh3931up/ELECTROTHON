@@ -36,7 +36,6 @@ const registerUser = async (req, res, next) => {
   }
 };
 
-
 const login = async (req, res, next) => {
   try {
     const { email, password, role } = req.body;
@@ -63,34 +62,21 @@ const login = async (req, res, next) => {
 
     const token = await user.generateJWTToken();
 
-    // Set cookie options
-    const cookieOptions = {
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-    };
-
     user.password = undefined;
 
-    res.cookie("token", token, cookieOptions)
-      .status(200)
-      .json({
-        success: true,
-        message: "User logged in successfully",
-        user
-      });
+    res.status(200).json({
+      success: true,
+      message: "User logged in successfully",
+      token, // Return the token in the response body
+      role: user.role, // Return the user role in the response body
+      user
+    });
   } catch (error) {
     return next(new AppError(error.message, 500));
   }
 };
 
 const logout = (req, res) => {
-  res.cookie("token", null, {
-    secure: process.env.NODE_ENV === "production" ? true : false,
-    maxAge: 0,
-    httpOnly: true,
-  });
-
   res.status(200).json({
     success: true,
     message: "User logged out successfully",
@@ -112,12 +98,9 @@ const getProfile = async (req, res) => {
   }
 };
 
-
-
 const updateUser = async (req, res, next) => {
   const { fullName } = req.body;
   const {id}=req.params;
-  // const { id } = req.user;
 
   const user = await User.findById(id);
   console.log(user,"da");
@@ -127,7 +110,6 @@ const updateUser = async (req, res, next) => {
   console.log(user.fullName);
   if (user?.fullName) {
     user.fullName=fullName;
-    // user?.fullName = fullName;
   }
 
   await user.save();
