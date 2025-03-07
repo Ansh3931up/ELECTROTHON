@@ -1,6 +1,6 @@
 # Core dependencies
-numpy>=1.21.0
-opencv-python>=3.4.4
+numpy==1.24.3
+opencv-python==4.8.1.78
 opencv-contrib-python==4.8.1.78
 Pillow>=8.3.2
 pytesseract>=0.3.8
