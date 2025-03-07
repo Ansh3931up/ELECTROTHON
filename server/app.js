@@ -17,12 +17,12 @@ app.use(express.urlencoded({ extended: true }));
 app.use(morgan("dev"));
 
 // Enable CORS
-app.use(
-  cors({
-    origin: [process.env.FRONTEND_URL, 'http://localhost', 'http://localhost:3000', 'capacitor://localhost'],
-    credentials: true,
-  })
-);
+app.use(cors("*"));
+// {
+//   origin: process.env.CLIENT_URL,
+//   credentials: true,
+// }  
+// );
 
 app.use(cookieParser());
 
