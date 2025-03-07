@@ -3,7 +3,7 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import { config } from "dotenv";
 import morgan from "morgan";
-import teacherRoutes from "./routes/teacher.routes.js";
+import userRoutes from "./routes/user.routes.js";
 // import studentRoutes from "./routes/student.routes.js";
 import classRoutes from "./routes/class.routes.js";
 import errorMiddleware from "./middlewares/error.middleware.js";
@@ -28,7 +28,7 @@ app.use("/ping", function (req, res) {
   res.send("/pong");
 });
 
-app.use("/api/v1/user", teacherRoutes);
+app.use("/api/v1/user", userRoutes);
 app.use("/api/v1/class", classRoutes);
 // app.use("/api/v1/student", studentRoutes);
 

@@ -5,7 +5,7 @@ import User from "../models/user.model.js";
 // Create a class by a teacher
 export const registerClass = async (req, res, next) => {
   try {
-    const { teacherId, className, time } = req.body;
+    const {  teacherId, className, time, studentIds } = req.body;
 
     // Validate required fields
     if (!teacherId || !className) {
@@ -20,15 +20,35 @@ export const registerClass = async (req, res, next) => {
       );
     }
 
+    // Validate student IDs if provided
+    if (studentIds && studentIds.length > 0) {
+      const students = await User.find({ 
+        _id: { $in: studentIds },
+        role: "student" 
+      });
+      
+      if (students.length !== studentIds.length) {
+        return next(new AppError("One or more student IDs are invalid", 400));
+      }
+    }
+
     // Create a new class
     const newClass = await Class.create({
       teacherId,
       className,
-      studentList: [], // Students will join later
+      studentList: studentIds || [], // Add students during class creation
       frequency: [], // frequency will be added when attendance is taken
       time: time || new Date(), // Default to current time
       attendance: [], // Attendance records will be added later
     });
+
+    // Update classId for all students
+    if (studentIds && studentIds.length > 0) {
+      await User.updateMany(
+        { _id: { $in: studentIds } },
+        { $set: { classId: newClass._id } }
+      );
+    }
 
     res.status(201).json({
       success: true,
@@ -112,9 +132,6 @@ export const generateAttendance = async (req, res, next) => {
   }
 };
 
-
-
-
 export const getClassfrequency = async (req, res, next) => {
   try {
     const { classId } = req.params;
@@ -133,5 +150,57 @@ export const getClassfrequency = async (req, res, next) => {
 
   } catch (error) {
     return next(new AppError(error.message, 500));
+  }
+};
+
+// Get classes for a teacher
+export const getTeacherClasses = async (req, res, next) => {
+  try {
+    const { teacherId } = req.params;
+    
+    // Verify if the teacher exists
+    const teacher = await User.findById(teacherId);
+    if (!teacher || teacher.role !== "teacher") {
+      return next(new AppError("Invalid Teacher ID or user is not a teacher", 400));
+    }
+    
+    // Find all classes where this teacher is assigned
+    const classes = await Class.find({ teacherId })
+      .populate('studentList', 'fullName email')
+      .select('className time studentList');
+    
+    res.status(200).json({
+      success: true,
+      count: classes.length,
+      data: classes
+    });
+  } catch (error) {
+    next(new AppError(error.message, 500));
+  }
+};
+
+// Get classes for a student
+export const getStudentClasses = async (req, res, next) => {
+  try {
+    const { studentId } = req.params;
+    
+    // Verify if the student exists
+    const student = await User.findById(studentId);
+    if (!student || student.role !== "student") {
+      return next(new AppError("Invalid Student ID or user is not a student", 400));
+    }
+    
+    // Find the class this student is part of
+    const classes = await Class.find({ studentList: studentId })
+      .populate('teacherId', 'fullName email')
+      .select('className time');
+    
+    res.status(200).json({
+      success: true,
+      count: classes.length,
+      data: classes
+    });
+  } catch (error) {
+    next(new AppError(error.message, 500));
   }
 };
