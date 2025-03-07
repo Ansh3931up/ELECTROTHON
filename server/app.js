@@ -1,5 +1,5 @@
 import express from "express";
-// import cors from "cors";
+import cors from "cors";
 import cookieParser from "cookie-parser";
 import { config } from "dotenv";
 import morgan from "morgan";
@@ -15,12 +15,14 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan("dev"));
-// app.use(
-//   cors({
-//     origin: [process.env.FRONTEND_URL],
-//     credentials: true,
-//   })
-// );
+
+// Enable CORS
+app.use(
+  cors({
+    origin: [process.env.FRONTEND_URL, 'http://localhost', 'http://localhost:3000', 'capacitor://localhost'],
+    credentials: true,
+  })
+);
 
 app.use(cookieParser());
 
