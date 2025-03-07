@@ -18,11 +18,12 @@ app.use(morgan("dev"));
 
 // Enable CORS
 const allowedOrigins = [
-  process.env.FRONTEND_URL,
+  
   'http://localhost',
   'http://localhost:3000',
   'capacitor://localhost',
-  'https://localhost'
+  'https://localhost',
+  process.env.FRONTEND_URL
 ];
 
 app.use(
