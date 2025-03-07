@@ -38,15 +38,15 @@ function App() {
   };
 
   // Role-based redirect after login
-  const RoleBasedRedirect = () => {
-    const role = getUserRole();
-    if (role === "teacher") {
-      return <Navigate to="/teacher" />;
-    } else if (role === "student") {
-      return <Navigate to="/student" />;
-    }
-    return <Navigate to="/login" />;
-  };
+  // const RoleBasedRedirect = () => {
+  //   const role = getUserRole();
+  //   if (role === "teacher") {
+  //     return <Navigate to="/teacher" />;
+  //   } else if (role === "student") {
+  //     return <Navigate to="/student" />;
+  //   }
+  //   return <Navigate to="/login" />;
+  // };
 
   return (
     <>
@@ -70,7 +70,7 @@ function App() {
             </ProtectedRoute>
           }
         />
-        <Route path="/redirect" element={<RoleBasedRedirect />} />
+        {/* <Route path="/redirect" element={<RoleBasedRedirect />} /> */}
       </Routes>
     </>
   );

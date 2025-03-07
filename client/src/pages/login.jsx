@@ -27,12 +27,9 @@ const Login = () => {
 
     dispatch(loginUser(formData)).then((result) => {
       if (result.meta.requestStatus === "fulfilled") {
-        const userRole = result.payload.role;
-        console.log('Full Response:', result.payload); // Log full response
         
-        // Force redirect after setting localStorage
-        localStorage.setItem('userRole', userRole);
-        localStorage.setItem('token', result.payload.token);
+        console.log('Full Response:', result.payload); // Log full response
+       
         window.location.href = userRole === "teacher" ? "/teacher" : "/student";
       }
     }).catch((error) => {

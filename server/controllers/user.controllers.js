@@ -61,9 +61,9 @@ const login = async (req, res, next) => {
     }
 
     const token = await user.generateJWTToken();
-
+    console.log("Generated Token:", token); // Debugging
     user.password = undefined;
-
+    
     res.status(200).json({
       success: true,
       message: "User logged in successfully",

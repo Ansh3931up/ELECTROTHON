@@ -12,7 +12,7 @@ export const loginUser = createAsyncThunk(
       const response = await axios.post(`${API_URL}/login`, userData, {
         withCredentials: true,
       });
-      return response.data.user;
+      return response.data; // Return the entire response data
     } catch (error) {
       return rejectWithValue(error.response.data.message || "Login failed");
     }
@@ -33,16 +33,18 @@ export const signupUser = createAsyncThunk(
   }
 );
 
-
 export const logoutUser = createAsyncThunk("auth/logout", async () => {
   await axios.post(`${API_URL}/logout`, {}, { withCredentials: true });
   return null;
 });
 
+// Retrieve user from localStorage
+const storedUser = JSON.parse(localStorage.getItem('user')) || null;
+
 // Auth Slice
 const authSlice = createSlice({
   name: "auth",
-  initialState: { user: null, loading: false, error: null },
+  initialState: { user: storedUser, loading: false, error: null },
   reducers: {},
   extraReducers: (builder) => {
     builder
@@ -51,8 +53,11 @@ const authSlice = createSlice({
         state.error = null;
       })
       .addCase(loginUser.fulfilled, (state, action) => {
-        state.user = action.payload;
+        state.user = action.payload.user;
         state.loading = false;
+        localStorage.setItem('user', JSON.stringify(action.payload)); // Save the user data
+        localStorage.setItem('token', action.payload.token); // Save the token
+        localStorage.setItem('userRole', action.payload.role); // Save the role
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.error = action.payload;
@@ -74,6 +79,9 @@ const authSlice = createSlice({
 
       .addCase(logoutUser.fulfilled, (state) => {
         state.user = null;
+        localStorage.removeItem('user'); // Remove the user data
+        localStorage.removeItem('token'); // Remove the token
+        localStorage.removeItem('userRole'); // Remove the role
       });
   },
 });
