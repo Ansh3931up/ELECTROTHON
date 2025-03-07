@@ -1,0 +1,82 @@
+# Node.js dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+bun.lockb
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+logs
+*.log
+logs/*
+debug.log
+*.log.*
+*.log.[0-9]
+pm2.log
+npm-debug.log
+yarn-debug.log
+pnpm-debug.log
+bun-debug.log
+.vercel/
+.netlify/
+
+# Build output
+dist/
+build/
+.cache/
+.next/
+out/
+public/build/
+
+# Editor and system files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Dependency directories for various package managers
+jspm_packages/
+bower_components/
+
+# Coverage reports
+coverage/
+*.lcov
+
+# Serverless/Cloud functions
+.serverless/
+
+# Firebase
+.firebase/
+.firebaserc
+firebase-debug.log
+
+# Storybook
+.storybook-out/
+
+# SvelteKit and other bundlers
+.svelte-kit/
+
+# Angular
+.angular/
+
+# Husky hooks
+.husky/_/
+
+# TypeScript cache
+*.tsbuildinfo
