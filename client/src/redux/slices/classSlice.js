@@ -1,7 +1,7 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import axios from "axios";
 
-const API_URL = import.meta.env.VITE_BASE_URL + "/class";
+const API_URL = "https://electrothon.onrender.com/api/v1" + "/class";
 
 // Get teacher's classes
 export const getTeacherClasses = createAsyncThunk(

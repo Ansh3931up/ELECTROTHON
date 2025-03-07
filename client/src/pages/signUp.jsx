@@ -27,8 +27,9 @@ const Signup = () => {
         const userRole = result.payload.role;
         console.log('Full Response:', result.payload);
         
-        // Force redirect after setting session storage
-        sessionStorage.setItem('userRole', userRole);
+        // Force redirect after setting localStorage
+        localStorage.setItem('userRole', userRole);
+        localStorage.setItem('token', result.payload.token);
         window.location.href = userRole === "teacher" ? "/teacher" : "/student";
       }
     }).catch((error) => {

@@ -1,7 +1,7 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import axios from "axios";
 
-const API_URL = import.meta.env.VITE_BASE_URL + "/class"; // Change this to your backend URL
+const API_URL = "https://electrothon.onrender.com/api/v1" + "/class"; // Change this to your backend URL
 
 // Async thunk to fetch attendance frequency
 export const fetchAttendancefrequency = createAsyncThunk(

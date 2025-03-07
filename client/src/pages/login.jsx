@@ -22,18 +22,21 @@ const Login = () => {
   };
 
   const handleSubmit = (e) => {
+    console.log("Form Data:", formData); // Log form data
     e.preventDefault();
+
     dispatch(loginUser(formData)).then((result) => {
       if (result.meta.requestStatus === "fulfilled") {
         const userRole = result.payload.role;
-        console.log('Full Response:', result.payload);
+        console.log('Full Response:', result.payload); // Log full response
         
-        // Force redirect after setting session storage
-        sessionStorage.setItem('userRole', userRole);
+        // Force redirect after setting localStorage
+        localStorage.setItem('userRole', userRole);
+        localStorage.setItem('token', result.payload.token);
         window.location.href = userRole === "teacher" ? "/teacher" : "/student";
       }
     }).catch((error) => {
-      console.error('Login error:', error);
+      console.error('Login error:', error); // Log error
     });
   };
 
