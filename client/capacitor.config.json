@@ -1,5 +1,5 @@
 {
-  "appId": "com.client.cpp",
+  "appId": "com.client.app",
   "appName": "client",
   "webDir": "dist"
 }

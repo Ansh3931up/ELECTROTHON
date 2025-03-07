@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from 'react-router-dom';
+import axios from "axios";
 
 import { signupUser } from "../redux/slices/authSlice";
 
@@ -10,10 +11,9 @@ const Signup = () => {
   const { loading, error } = useSelector((state) => state.auth);
 
   const [formData, setFormData] = useState({
-    fullname: "",
     email: "",
     password: "",
-    role: "student", // Default role
+    role: "student", // Default role selection
   });
 
   const handleChange = (e) => {
@@ -25,12 +25,14 @@ const Signup = () => {
     dispatch(signupUser(formData)).then((result) => {
       if (result.meta.requestStatus === "fulfilled") {
         const userRole = result.payload.role;
-        if (userRole === "teacher") {
-          navigate("/teacher");
-        } else {
-          navigate("/student");
-        }
+        console.log('Full Response:', result.payload);
+        
+        // Force redirect after setting session storage
+        sessionStorage.setItem('userRole', userRole);
+        window.location.href = userRole === "teacher" ? "/teacher" : "/student";
       }
+    }).catch((error) => {
+      console.error('Signup error:', error);
     });
   };
 
@@ -43,15 +45,6 @@ const Signup = () => {
         <h2 className="text-xl font-bold mb-4">Signup</h2>
         {error && <p className="text-red-500">{error}</p>}
 
-        <input
-          name="fullname"
-          placeholder="Full Name"
-          type="text"
-          value={formData.fullname}
-          onChange={handleChange}
-          required
-          className="input-field"
-        />
         <input
           name="email"
           placeholder="Email"
@@ -99,6 +92,9 @@ const Signup = () => {
 
         <button type="submit" disabled={loading} className="btn">
           {loading ? "Signing up..." : "Signup"}
+        </button>
+        <button type="button" onClick={() => navigate(-1)} className="btn ml-4">
+          Back
         </button>
       </form>
     </div>

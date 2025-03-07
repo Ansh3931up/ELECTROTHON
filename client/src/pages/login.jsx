@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import axios from "axios";
 
 import { loginUser } from "../redux/slices/authSlice";
 
 const Login = () => {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { loading, error } = useSelector((state) => state.auth);
   const [redirectTo, setRedirectTo] = useState(null);
 
@@ -19,7 +20,6 @@ const Login = () => {
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
-
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -97,6 +97,9 @@ const Login = () => {
 
         <button type="submit" disabled={loading} className="btn">
           {loading ? "Logging in..." : "Login"}
+        </button>
+        <button type="button" onClick={() => navigate(-1)} className="btn ml-4">
+          Back
         </button>
       </form>
     </div>
