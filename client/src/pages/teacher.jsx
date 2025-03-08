@@ -95,69 +95,115 @@ const Teacher = () => {
           Create New Class
         </button>
 
-        {/* Updated Create Class Form */}
+        {/* Enhanced Create Class Form Modal */}
         {showCreateForm && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-            <form onSubmit={handleCreateClass} className="bg-white p-6 rounded-lg w-96 max-h-[80vh] overflow-y-auto">
-              <h2 className="text-xl font-bold mb-4">Create New Class</h2>
-              <input
-                type="text"
-                placeholder="Class Name"
-                value={newClass.className}
-                onChange={(e) => setNewClass({ ...newClass, className: e.target.value })}
-                className="block w-full mb-2 p-2 border rounded"
-              />
-              <input
-                type="datetime-local"
-                value={newClass.time}
-                onChange={(e) => setNewClass({ ...newClass, time: e.target.value })}
-                className="block w-full mb-2 p-2 border rounded"
-              />
-              
-              {/* Student Selection */}
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Select Students
-                </label>
-                <div className="max-h-48 overflow-y-auto border rounded p-2">
-                  {students.map((student) => (
-                    <div key={student._id} className="flex items-center p-2 hover:bg-gray-50">
-                      <input
-                        type="checkbox"
-                        id={student._id}
-                        checked={newClass.studentIds.includes(student._id)}
-                        onChange={() => handleStudentSelection(student._id)}
-                        className="mr-2"
-                      />
-                      <label htmlFor={student._id} className="cursor-pointer">
-                        {student.fullName} ({student.email})
-                      </label>
-                    </div>
-                  ))}
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md transform transition-all">
+              {/* Modal Header */}
+              <div className="border-b border-gray-100 px-6 py-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-2xl font-semibold text-gray-800">Create New Class</h2>
+                  <button
+                    onClick={() => setShowCreateForm(false)}
+                    className="text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
                 </div>
+                <p className="text-sm text-gray-500 mt-1">Fill in the details to create a new class</p>
               </div>
 
-              {/* Selected Students Count */}
-              <div className="text-sm text-gray-600 mb-4">
-                Selected Students: {newClass.studentIds.length}
-              </div>
+              {/* Modal Body */}
+              <form onSubmit={handleCreateClass} className="p-6 space-y-6">
+                {/* Class Name Input */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Class Name
+                    <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Enter class name"
+                      value={newClass.className}
+                      onChange={(e) => setNewClass({ ...newClass, className: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                      required
+                    />
+                    <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
 
-              <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateForm(false)}
-                  className="bg-gray-500 text-white px-4 py-2 rounded"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="bg-blue-500 text-white px-4 py-2 rounded"
-                >
-                  Create
-                </button>
-              </div>
-            </form>
+                {/* Class Time Input */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Class Time
+                    <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={newClass.time}
+                    onChange={(e) => setNewClass({ ...newClass, time: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    required
+                  />
+                </div>
+
+                {/* Student Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Select Students
+                    <span className="text-red-500">*</span>
+                  </label>
+                  <div className="max-h-48 overflow-y-auto border border-gray-300 rounded-lg">
+                    {students.map((student) => (
+                      <div 
+                        key={student._id} 
+                        className="flex items-center p-3 hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0"
+                      >
+                        <input
+                          type="checkbox"
+                          id={student._id}
+                          checked={newClass.studentIds.includes(student._id)}
+                          onChange={() => handleStudentSelection(student._id)}
+                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 transition-colors"
+                        />
+                        <label htmlFor={student._id} className="ml-3 cursor-pointer flex-1">
+                          <div className="text-sm font-medium text-gray-700">{student.fullName}</div>
+                          <div className="text-xs text-gray-500">{student.email}</div>
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-2 text-sm text-gray-500">
+                    Selected: {newClass.studentIds.length} students
+                  </div>
+                </div>
+
+                {/* Modal Footer */}
+                <div className="flex items-center justify-end space-x-3 pt-4 border-t border-gray-100">
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateForm(false)}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-500 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-6 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all"
+                  >
+                    Create Class
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         )}
 

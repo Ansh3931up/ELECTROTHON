@@ -3,6 +3,8 @@ import { useDispatch, useSelector } from "react-redux";
 import { getStudentClasses, getfrequencyByClassId } from "../redux/slices/classSlice";
 import detectSound from "../helpers/detectSound";
 import NavBar from "../components/NavBar";
+import { checkAndRequestPermissions, checkDeviceCapabilities } from '../utils/permissions';
+import { Camera } from '@capacitor/camera';
 
 const Student = () => {
   const dispatch = useDispatch();
@@ -12,6 +14,12 @@ const Student = () => {
   const [status, setStatus] = useState("Select a class to check frequency");
   const [selectedClassId, setSelectedClassId] = useState(null);
   const [classFrequencies, setClassFrequencies] = useState({});
+  const [hasPermissions, setHasPermissions] = useState(false);
+  const [deviceCapabilities, setDeviceCapabilities] = useState({
+    hasMicrophone: false,
+    hasCamera: false
+  });
+  console.log("classes1111",classes);
 
   useEffect(() => {
     if (user?._id) {
@@ -35,6 +43,24 @@ const Student = () => {
 
     return () => clearInterval(interval);
   }, [dispatch, selectedClassId]);
+
+  useEffect(() => {
+    const setupPermissions = async () => {
+      // Check device capabilities first
+      const capabilities = await checkDeviceCapabilities();
+      setDeviceCapabilities(capabilities);
+
+      if (!capabilities.hasMicrophone || !capabilities.hasCamera) {
+        alert('Your device must have both a camera and microphone for attendance.');
+        return;
+      }
+
+      const granted = await checkAndRequestPermissions('student');
+      setHasPermissions(granted);
+    };
+
+    setupPermissions();
+  }, []);
 
   const handleFetchFrequency = async (classId) => {
     setSelectedClassId(classId);
@@ -64,10 +90,56 @@ const Student = () => {
     }));
   };
 
+  const handleAttendance = async () => {
+    if (!hasPermissions) {
+      const granted = await checkAndRequestPermissions('student');
+      if (!granted) {
+        alert('Camera and microphone permissions are required for attendance');
+        return;
+      }
+      setHasPermissions(granted);
+    }
+
+    try {
+      // Start listening for audio
+      const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      // Take photo when needed
+      const photo = await Camera.getPhoto({
+        quality: 90,
+        allowEditing: false,
+        resultType: 'base64'
+      });
+
+      // Stop audio stream after use
+      audioStream.getTracks().forEach(track => track.stop());
+
+      // Your existing attendance logic here
+      
+    } catch (error) {
+      console.error('Error during attendance:', error);
+      alert('Failed to process attendance. Please try again.');
+    }
+  };
+
   return (
     <div>
       <NavBar />
       <div className="p-6">
+        {(!deviceCapabilities.hasMicrophone || !deviceCapabilities.hasCamera) && (
+          <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4">
+            <p className="font-bold">Device Error</p>
+            <p>Your device must have both a camera and microphone for attendance.</p>
+          </div>
+        )}
+        
+        {!hasPermissions && deviceCapabilities.hasMicrophone && deviceCapabilities.hasCamera && (
+          <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4">
+            <p className="font-bold">Permissions Required</p>
+            <p>Camera and microphone access is required for attendance.</p>
+          </div>
+        )}
+
         <h1 className="text-2xl font-bold mb-4">Student Dashboard</h1>
 
         {/* Classes List */}
@@ -138,6 +210,18 @@ const Student = () => {
         )}
 
         <canvas id="frequencyData" className="w-full border rounded-lg mt-4"></canvas>
+
+        <button
+          onClick={handleAttendance}
+          disabled={!hasPermissions || !deviceCapabilities.hasMicrophone || !deviceCapabilities.hasCamera}
+          className={`bg-blue-500 text-white px-4 py-2 rounded ${
+            (!hasPermissions || !deviceCapabilities.hasMicrophone || !deviceCapabilities.hasCamera) 
+              ? 'opacity-50 cursor-not-allowed' 
+              : 'hover:bg-blue-600'
+          }`}
+        >
+          Mark Attendance
+        </button>
       </div>
     </div>
   );
