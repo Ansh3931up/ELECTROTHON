@@ -18,8 +18,10 @@ app.use(morgan("dev"));
 
 // Enable CORS
 const allowedOrigins = [
-  "*"
-  
+  'http://localhost:3000',
+  'https://localhost',
+  'capacitor://localhost',
+  'http://localhost',
 ];
 
 app.use(
@@ -33,7 +35,7 @@ app.use(
       }
       return callback(null, true);
     },
-    // credentials: true,
+    credentials: true, // Allow credentials
   })
 );
 
