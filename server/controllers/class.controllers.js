@@ -60,25 +60,11 @@ export const registerClass = async (req, res, next) => {
   }
 };
 
-const generatefrequency = () => {
-  const minFreq = 1000; // 1 kHz
-  const maxFreq = 8000; // 8 kHz
-  const frequency = new Set();
-
-  while (frequency.size < 1) {
-    const randomFreq =
-      Math.floor(Math.random() * (maxFreq - minFreq + 1)) + minFreq;
-    frequency.add(randomFreq);
-  }
-
-  return Array.from(frequency);
-};
-
 export const generateAttendance = async (req, res, next) => {
   try {
     console.log("Received Request:", req.body); // 👈 Debug input
 
-    const { classId, teacherId } = req.body;
+    const { classId, teacherId,frequency } = req.body;
 
     if (!classId) {
       console.log("❌ Error: Class ID is missing");
@@ -90,10 +76,6 @@ export const generateAttendance = async (req, res, next) => {
       console.log("❌ Error: Teacher not found");
       return next(new AppError("Teacher ID is not valid", 400));
     }
-
-    // Generate new frequency
-    const frequency = generatefrequency();
-    console.log("✅ Generated frequency:", frequency);
 
     // Find class and update frequency
     const classData = await Class.findById(classId);
