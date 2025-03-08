@@ -120,10 +120,25 @@ const updateUser = async (req, res, next) => {
   });
 };
 
+const getAllStudents = async (req, res, next) => {
+  try {
+    const students = await User.find({ role: "student" }).select("-password");
+
+    res.status(200).json({
+      success: true,
+      message: "Students fetched successfully",
+      students,
+    });
+  } catch (error) {
+    return next(new AppError("Failed to fetch students", 500));
+  }
+};
+
 export {
   registerUser,
   login,
   logout,
   getProfile,
   updateUser,
+  getAllStudents,
 };
