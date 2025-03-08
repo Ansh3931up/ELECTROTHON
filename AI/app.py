@@ -17,6 +17,10 @@ import requests
 # Load environment variables
 load_dotenv()
 
+# Use environment variables
+MONGODB_URI = os.getenv('MONGODB_URI')
+CLOUDINARY_CLOUD_NAME = os.getenv('CLOUDINARY_CLOUD_NAME')
+
 app = Flask(__name__)
 
 # Configure Cloudinary
