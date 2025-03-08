@@ -5,9 +5,9 @@ const registerUser = async (req, res, next) => {
   try {
     console.log("Received Data:", req.body); // Debugging
 
-    const { fullname, email, password, role, phone } = req.body;
+    const { fullName, email, password, role, phone } = req.body;
 
-    if (!fullname || !email || !password || !role || !phone) {
+    if (!fullName || !email || !password || !role || !phone) {
       return next(new AppError("All fields are required", 400));
     }
 
@@ -17,7 +17,7 @@ const registerUser = async (req, res, next) => {
     }
 
     const user = await User.create({
-      fullName: fullname,
+      fullName,
       email,
       password,
       role,
