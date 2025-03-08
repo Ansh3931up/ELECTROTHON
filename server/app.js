@@ -18,7 +18,7 @@ app.use(morgan("dev"));
 
 // Enable CORS
 const allowedOrigins = [
-  'http://localhost:3000',
+  'http://localhost:5173',
   'https://localhost',
   'capacitor://localhost',
   'http://localhost',
