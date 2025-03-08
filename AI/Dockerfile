@@ -12,9 +12,11 @@ RUN apt-get update && apt-get install -y \
 # Copy only necessary files
 COPY requirements.txt .
 COPY app.py .
+COPY .env .
+
+# If you have these directories, uncomment these lines
 COPY src/ ./src/
 COPY templates/ ./templates/
-COPY data/shape_predictor/ ./data/shape_predictor/
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
