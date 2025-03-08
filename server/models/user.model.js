@@ -38,6 +38,19 @@ const userSchema = new Schema(
       ref: "Class",
       default: null,
     },
+    faceData:{
+      faceImages: [{
+          url: String,
+          clloudinary_public_id: String,
+          captured_at:{type:Date, default:Date.now}
+      }],
+      lastUpdated: {type:Date, default:Date.now},
+      verificationStatus:{
+          type: String,
+          enum: ['pending', 'verified', 'rejected'],
+          default: 'pending'
+      }
+  }
   },
   {
     timestamps: true,
