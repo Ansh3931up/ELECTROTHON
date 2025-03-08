@@ -28,6 +28,13 @@ const userSchema = new Schema(
       select: false,
       
     },
+    phone: {
+      type: String,
+      required: [true, "Phone number is required"],
+      unique: true,
+      minLength: [10, "Phone number must be atleast 10 digits"],
+      maxLength: [10, "Phone number must not exceed more than 10 digits"],
+    },
     role: {
       type: String,
       enum: ["teacher", "student"], // Allowed values
