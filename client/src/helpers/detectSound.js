@@ -1,4 +1,4 @@
-const detectSound = async (setStatus, targetFrequencies) => {
+const detectSound = async (setStatus, expectedFrequencies, onDetectionComplete) => {
   if (!window.isSecureContext) {
     setStatus("ERROR: App must be run over HTTPS or localhost.");
     return false;
@@ -24,7 +24,7 @@ const detectSound = async (setStatus, targetFrequencies) => {
     const source = audioContext.createMediaStreamSource(stream);
     const analyser = audioContext.createAnalyser();
 
-    analyser.fftSize = 32768;
+    analyser.fftSize = 2048;
     const bufferLength = analyser.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
 
@@ -86,7 +86,7 @@ const detectSound = async (setStatus, targetFrequencies) => {
       ctx.fillStyle = 'rgb(0, 0, 0)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      targetFrequencies.forEach(targetFreq => {
+      expectedFrequencies.forEach(targetFreq => {
         const targetBin = Math.floor(targetFreq / binSize);
         const binRange = 4;
         let maxAmplitude = 0;
@@ -145,7 +145,7 @@ const detectSound = async (setStatus, targetFrequencies) => {
 
       // Check for successful detection
       const now = Date.now();
-      const allFrequenciesDetected = targetFrequencies.every(freq =>
+      const allFrequenciesDetected = expectedFrequencies.every(freq =>
         (consecutiveDetections.get(freq) || 0) >= requiredDetections
       );
 
@@ -178,16 +178,19 @@ const detectSound = async (setStatus, targetFrequencies) => {
           notificationShown = false;
           consecutiveDetections.clear();
           detectedFrequencies.clear();
-          targetFrequencies.forEach(freq => updateFrequencyIndicator(freq, false));
+          expectedFrequencies.forEach(freq => updateFrequencyIndicator(freq, false));
           setStatus("Listening for signals...");
         }, notificationCooldown);
+
+        // Call the callback with success
+        onDetectionComplete(true);
       }
 
       // Reset if no detection for a while
       if (now - lastDetectionTime > detectionTimeout) {
         consecutiveDetections.clear();
         detectedFrequencies.clear();
-        targetFrequencies.forEach(freq => updateFrequencyIndicator(freq, false));
+        expectedFrequencies.forEach(freq => updateFrequencyIndicator(freq, false));
       }
 
       requestAnimationFrame(detectTone);
@@ -198,6 +201,7 @@ const detectSound = async (setStatus, targetFrequencies) => {
   } catch (error) {
     console.error("Error accessing microphone:", error);
     setStatus("Error: " + error.message);
+    onDetectionComplete(false);
     return false;
   }
 };
