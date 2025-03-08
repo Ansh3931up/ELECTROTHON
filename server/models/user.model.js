@@ -38,6 +38,17 @@ const userSchema = new Schema(
       ref: "Class",
       default: null,
     },
+    faceDescriptor: {
+      type: [Number], // Store face descriptor as array of numbers
+      required: false,
+      validate: {
+        validator: function(v) {
+          // Face descriptors typically have 128 dimensions
+          return !v || v.length === 128;
+        },
+        message: 'Face descriptor must have 128 dimensions'
+      }
+    }
   },
   {
     timestamps: true,
