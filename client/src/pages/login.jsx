@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { Navigate, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import axios from "axios";
 
 import { loginUser } from "../redux/slices/authSlice";
@@ -27,19 +27,19 @@ const Login = () => {
 
     dispatch(loginUser(formData)).then((result) => {
       if (result.meta.requestStatus === "fulfilled") {
-        
+        const userRole = result.payload.role;
+        const userid =  result.payload._id;
         console.log('Full Response:', result.payload); // Log full response
-       
-        window.location.href = userRole === "teacher" ? "/teacher" : "/student";
+        
+        // Force redirect after setting localStorage
+        localStorage.setItem('userRole', userRole);
+        localStorage.setItem('userid', userid);
+        navigate(userRole === "teacher" ? "/teacher" : "/student");
       }
     }).catch((error) => {
       console.error('Login error:', error); // Log error
     });
   };
-
-  if (redirectTo) {
-    return <Navigate to={redirectTo} replace={true} />;
-  }
 
   return (
     <div className="flex items-center justify-center h-screen">

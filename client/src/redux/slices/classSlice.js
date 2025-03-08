@@ -9,6 +9,7 @@ export const getTeacherClasses = createAsyncThunk(
   async (teacherId, { rejectWithValue }) => {
     try {
       const response = await axios.get(`${API_URL}/teacher/${teacherId}`);
+      console.log("Received classes:", response.data);
       return response.data.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || "Failed to fetch classes");
@@ -46,8 +47,7 @@ export const generatefrequency = createAsyncThunk(
   "class/generatefrequency",
   async ({ classId, teacherId, frequency }, { rejectWithValue }) => {
     try {
-      const response = await axios.post(
-        `${API_URL}/generate-attendance`,
+      const response = await axios.post(`${API_URL}/generate-attendance`,
         { classId, teacherId, frequency },
         {
           headers: {
@@ -55,7 +55,7 @@ export const generatefrequency = createAsyncThunk(
           },
         }
       );
-
+      console.log("Received frequency:", response.data);
       // Store frequency in localStorage with classId
       localStorage.setItem(`frequency_${classId}`, JSON.stringify(frequency));
       

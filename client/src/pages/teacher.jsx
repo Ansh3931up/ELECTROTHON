@@ -19,9 +19,9 @@ const generateRandomFrequency = () => {
 
 const Teacher = () => {
   const dispatch = useDispatch();
-  const  user  = useSelector((state) => state.auth.user);
-  console.log("use",user);
-  const { classes, loading, error, frequency } = useSelector((state) => state.class);
+  const user = useSelector((state) => state.auth.user.user);
+  console.log("use", user);
+  const { classes, loading, error } = useSelector((state) => state.class);
   
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newClass, setNewClass] = useState({
@@ -29,17 +29,21 @@ const Teacher = () => {
     time: "",
     studentIds: "",
   });
+  const [classFrequencies, setClassFrequencies] = useState({});
+  const [disabledButtons, setDisabledButtons] = useState({});
 
   useEffect(() => {
-    // if (user?._id) {
-      dispatch(getTeacherClasses("67c61a646bc06ce3fe558d7a"));
-    // }
+    if (user?._id) {
+      console.log(user._id,"inside");
+      const resp=dispatch(getTeacherClasses(user._id));
+      console.log(resp,"class");
+    }
   }, [dispatch, user]);
 
   const handleCreateClass = (e) => {
     e.preventDefault();
     const classData = {
-      teacherId: "67c61a646bc06ce3fe558d7a",
+      teacherId: user._id,
       ...newClass,
       studentIds: newClass.studentIds.split(',').map(id => id.trim()),
     };
@@ -48,13 +52,23 @@ const Teacher = () => {
     setNewClass({ className: "", time: "", studentIds: "" });
   };
 
-  const handleGenerateFrequency = (classId) => {
-    const newFrequency = generateRandomFrequency();
-    dispatch(generatefrequency({ 
+  const handleGenerateFrequency = async (classId) => {
+    setDisabledButtons(prev => ({ ...prev, [classId]: true }));
+    setTimeout(() => {
+      setDisabledButtons(prev => ({ ...prev, [classId]: false }));
+    }, 5000); // Disable button for 5 seconds
+
+    const newFrequency =await  generateRandomFrequency();
+    console.log(newFrequency,"frequency");
+    const result = await dispatch(generatefrequency({ 
       classId, 
-      teacherId: "67c61a646bc06ce3fe558d7a",
+      teacherId: user._id,
       frequency: newFrequency // Send the generated frequency to backend
     }));
+    if (generatefrequency.fulfilled.match(result)) {
+      console.log(result.payload,"loaded");
+      setClassFrequencies(prev => ({ ...prev, [classId]: result.payload }));
+    }
   };
 
   return (
@@ -125,12 +139,25 @@ const Teacher = () => {
               <button
                 onClick={() => handleGenerateFrequency(cls._id)}
                 className="bg-green-500 text-white px-4 py-2 rounded mt-2 mr-2"
+                disabled={disabledButtons[cls._id]}
               >
                 Generate Frequency
               </button>
-              {frequency.length > 0 && (
+              {classFrequencies[cls._id] && (
+                <div className="bg-gray-100 p-4 rounded-lg mt-2">
+                  <h2 className="text-lg font-semibold mb-2">Active Frequency</h2>
+                  <div className="grid grid-cols-3 gap-4">
+                    {classFrequencies[cls._id].map((freq, index) => (
+                      <div key={index} className="bg-white p-3 rounded-md shadow text-center">
+                        <span className="text-blue-600 font-mono text-lg">{freq} Hz</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {classFrequencies[cls._id] && (
                 <button
-                  onClick={() => playSound(frequency)}
+                  onClick={() => playSound(classFrequencies[cls._id])}
                   className="bg-blue-500 text-white px-4 py-2 rounded mt-2"
                 >
                   Play Sound
@@ -139,20 +166,6 @@ const Teacher = () => {
             </div>
           ))}
         </div>
-
-        {/* Frequency Display */}
-        {frequency.length > 0 && (
-          <div className="bg-gray-100 p-4 rounded-lg">
-            <h2 className="text-lg font-semibold mb-2">Active Frequency</h2>
-            <div className="grid grid-cols-3 gap-4">
-              {frequency.map((freq, index) => (
-                <div key={index} className="bg-white p-3 rounded-md shadow text-center">
-                  <span className="text-blue-600 font-mono text-lg">{freq} Hz</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         {error && <p className="text-red-500 mt-2">{error}</p>}
       </div>
