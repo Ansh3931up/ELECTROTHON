@@ -1,29 +1,54 @@
 import { useNavigate } from "react-router-dom";
+import { useState } from "react";
 
 function Home() {
   const navigate = useNavigate();
+  const [activeSection, setActiveSection] = useState('home');
+
+  const features = [
+    {
+      title: "Smart Attendance",
+      description: "Sound-based face recognition system for foolproof attendance tracking",
+      icon: "📱"
+    },
+    {
+      title: "Resource Hub",
+      description: "Digital access to lab equipment, library resources, and study materials",
+      icon: "📚"
+    },
+    {
+      title: "Career Connect",
+      description: "LinkedIn-style platform for students to showcase work and connect with recruiters",
+      icon: "🤝"
+    },
+    {
+      title: "Inter-College Network",
+      description: "Collaborate with other institutions for events and resource sharing",
+      icon: "🌐"
+    }
+  ];
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pb-16">
       {/* Hero Section */}
-      <div className="container mx-auto px-4 py-16">
+      <div className="container mx-auto px-4 py-8 md:py-16">
         <div className="text-center">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">
-            Welcome to Learning Management System
+          <h1 className="text-4xl md:text-5xl font-bold text-blue-900 mb-4">
+            Welcome to <span className="text-blue-600">NeuraCampus</span>
           </h1>
-          <p className="text-xl text-gray-600 mb-8">
-            A platform for teachers and students to manage their learning journey
+          <p className="text-lg md:text-xl text-blue-700 mb-6 md:mb-8 px-4 max-w-2xl mx-auto">
+            Revolutionizing educational management with smart attendance, resource sharing, and career networking
           </p>
-          <div className="space-x-4">
+          <div className="flex flex-col sm:flex-row justify-center items-center space-y-4 sm:space-y-0 sm:space-x-4">
             <button
               onClick={() => navigate("/login")}
-              className="bg-blue-500 text-white px-6 py-2 rounded-md hover:bg-blue-600"
+              className="w-full sm:w-auto bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 transition-all duration-200 shadow-md hover:scale-105"
             >
               Login
             </button>
             <button
               onClick={() => navigate("/signup")}
-              className="bg-green-500 text-white px-6 py-2 rounded-md hover:bg-green-600"
+              className="w-full sm:w-auto bg-white text-blue-600 border-2 border-blue-600 px-8 py-3 rounded-lg hover:bg-blue-50 transition-all duration-200 shadow-md hover:scale-105"
             >
               Sign Up
             </button>
@@ -31,32 +56,42 @@ function Home() {
         </div>
       </div>
 
-      {/* Features Section */}
-      <div className="bg-white py-12">
-        <div className="container mx-auto px-4">
-          <h2 className="text-3xl font-bold text-center mb-8">Our Features</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="text-center p-6">
-              <h3 className="text-xl font-semibold mb-4">For Teachers</h3>
-              <p className="text-gray-600">
-                Create and manage courses, track student progress, and provide feedback
-              </p>
+      {/* Features Grid */}
+      <div className="container mx-auto px-4 py-8">
+        <h2 className="text-2xl md:text-3xl font-bold text-center text-blue-900 mb-8">Key Features</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {features.map((feature, index) => (
+            <div key={index} className="bg-white p-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:-translate-y-1">
+              <div className="text-4xl mb-4">{feature.icon}</div>
+              <h3 className="text-xl font-semibold mb-3 text-blue-800">{feature.title}</h3>
+              <p className="text-blue-600">{feature.description}</p>
             </div>
-            <div className="text-center p-6">
-              <h3 className="text-xl font-semibold mb-4">For Students</h3>
-              <p className="text-gray-600">
-                Access course materials, submit assignments, and track your progress
-              </p>
-            </div>
-            <div className="text-center p-6">
-              <h3 className="text-xl font-semibold mb-4">Interactive Learning</h3>
-              <p className="text-gray-600">
-                Engage with course content through various interactive features
-              </p>
-            </div>
-          </div>
+          ))}
         </div>
       </div>
+
+      {/* Bottom Navigation Bar */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-white shadow-lg border-t border-blue-100">
+        <div className="flex justify-around items-center py-3">
+          {[
+            { icon: "🏠", label: "Home", id: 'home' },
+            { icon: "📊", label: "Dashboard", id: 'dashboard' },
+            { icon: "📚", label: "Resources", id: 'resources' },
+            { icon: "👥", label: "Network", id: 'network' }
+          ].map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setActiveSection(item.id)}
+              className={`flex flex-col items-center space-y-1 ${
+                activeSection === item.id ? 'text-blue-600' : 'text-gray-600'
+              }`}
+            >
+              <span className="text-xl">{item.icon}</span>
+              <span className="text-xs font-medium">{item.label}</span>
+            </button>
+          ))}
+        </div>
+      </nav>
     </div>
   );
 }

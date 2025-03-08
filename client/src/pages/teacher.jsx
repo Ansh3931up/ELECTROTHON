@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { getTeacherClasses, createClass, generatefrequency } from "../redux/slices/classSlice";
+import { fetchAllStudents } from "../redux/slices/authSlice";
 import { playSound } from "../helpers/playSound";
 import NavBar from "../components/NavBar";
 
@@ -20,36 +21,45 @@ const generateRandomFrequency = () => {
 const Teacher = () => {
   const dispatch = useDispatch();
   const user = useSelector((state) => state.auth.user.user);
-  console.log("use", user);
+  const students = useSelector((state) => state.auth.students);
+  // console.log("students",students);
   const { classes, loading, error } = useSelector((state) => state.class);
   
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newClass, setNewClass] = useState({
     className: "",  
     time: "",
-    studentIds: "",
+    studentIds: [],
   });
   const [classFrequencies, setClassFrequencies] = useState({});
   const [disabledButtons, setDisabledButtons] = useState({});
 
   useEffect(() => {
     if (user?._id) {
-      console.log(user._id,"inside");
-      const resp=dispatch(getTeacherClasses(user._id));
-      console.log(resp,"class");
+      dispatch(getTeacherClasses(user._id));
+      dispatch(fetchAllStudents());
     }
-  }, [dispatch, user]);
+  }, [dispatch, user?._id]);
 
   const handleCreateClass = (e) => {
     e.preventDefault();
     const classData = {
       teacherId: user._id,
       ...newClass,
-      studentIds: newClass.studentIds.split(',').map(id => id.trim()),
+      studentIds: newClass.studentIds,
     };
     dispatch(createClass(classData));
     setShowCreateForm(false);
-    setNewClass({ className: "", time: "", studentIds: "" });
+    setNewClass({ className: "", time: "", studentIds: [] });
+  };
+
+  const handleStudentSelection = (studentId) => {
+    setNewClass(prev => ({
+      ...prev,
+      studentIds: prev.studentIds.includes(studentId)
+        ? prev.studentIds.filter(id => id !== studentId)
+        : [...prev.studentIds, studentId]
+    }));
   };
 
   const handleGenerateFrequency = async (classId) => {
@@ -85,10 +95,10 @@ const Teacher = () => {
           Create New Class
         </button>
 
-        {/* Create Class Form */}
+        {/* Updated Create Class Form */}
         {showCreateForm && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-            <form onSubmit={handleCreateClass} className="bg-white p-6 rounded-lg">
+            <form onSubmit={handleCreateClass} className="bg-white p-6 rounded-lg w-96 max-h-[80vh] overflow-y-auto">
               <h2 className="text-xl font-bold mb-4">Create New Class</h2>
               <input
                 type="text"
@@ -103,13 +113,35 @@ const Teacher = () => {
                 onChange={(e) => setNewClass({ ...newClass, time: e.target.value })}
                 className="block w-full mb-2 p-2 border rounded"
               />
-              <input
-                type="text"
-                placeholder="Student IDs (comma-separated)"
-                value={newClass.studentIds}
-                onChange={(e) => setNewClass({ ...newClass, studentIds: e.target.value })}
-                className="block w-full mb-4 p-2 border rounded"
-              />
+              
+              {/* Student Selection */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Select Students
+                </label>
+                <div className="max-h-48 overflow-y-auto border rounded p-2">
+                  {students.map((student) => (
+                    <div key={student._id} className="flex items-center p-2 hover:bg-gray-50">
+                      <input
+                        type="checkbox"
+                        id={student._id}
+                        checked={newClass.studentIds.includes(student._id)}
+                        onChange={() => handleStudentSelection(student._id)}
+                        className="mr-2"
+                      />
+                      <label htmlFor={student._id} className="cursor-pointer">
+                        {student.fullName} ({student.email})
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Selected Students Count */}
+              <div className="text-sm text-gray-600 mb-4">
+                Selected Students: {newClass.studentIds.length}
+              </div>
+
               <div className="flex justify-end gap-2">
                 <button
                   type="button"

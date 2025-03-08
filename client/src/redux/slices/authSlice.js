@@ -38,13 +38,27 @@ export const logoutUser = createAsyncThunk("auth/logout", async () => {
   return null;
 });
 
+// Add new thunk for fetching students
+export const fetchAllStudents = createAsyncThunk(
+  "auth/fetchStudents",
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await axios.get(`${API_URL}/students`);
+      console.log("Received students:", response.data);
+      return response.data.students;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || "Failed to fetch students");
+    }
+  }
+);
+
 // Retrieve user from localStorage
 const storedUser = JSON.parse(localStorage.getItem('user')) || null;
 
 // Auth Slice
 const authSlice = createSlice({
   name: "auth",
-  initialState: { user: storedUser, loading: false, error: null },
+  initialState: { user: storedUser, loading: false, error: null, students: [] },
   reducers: {},
   extraReducers: (builder) => {
     builder
@@ -82,6 +96,20 @@ const authSlice = createSlice({
         localStorage.removeItem('user'); // Remove the user data
         localStorage.removeItem('token'); // Remove the token
         localStorage.removeItem('userRole'); // Remove the role
+      })
+
+      .addCase(fetchAllStudents.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchAllStudents.fulfilled, (state, action) => {
+        // console.log("Received students:", action.payload);
+        state.students = action.payload;
+        state.loading = false;
+      })
+      .addCase(fetchAllStudents.rejected, (state, action) => {
+        state.error = action.payload;
+        state.loading = false;
       });
   },
 });

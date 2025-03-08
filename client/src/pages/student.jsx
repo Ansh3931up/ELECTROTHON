@@ -7,18 +7,17 @@ import NavBar from "../components/NavBar";
 const Student = () => {
   const dispatch = useDispatch();
   const user = useSelector((state) => state.auth.user.user);
-  console.log("this is :", user);
   const { classes, loading, error } = useSelector((state) => state.class);
-  const [listeningClasses, setListeningClasses] = useState({}); // State to manage listening status per class
+  const [listeningClasses, setListeningClasses] = useState({});
   const [status, setStatus] = useState("Select a class to check frequency");
   const [selectedClassId, setSelectedClassId] = useState(null);
-  const [classFrequencies, setClassFrequencies] = useState({}); // State to store frequencies for each class
+  const [classFrequencies, setClassFrequencies] = useState({});
 
   useEffect(() => {
     if (user?._id) {
       dispatch(getStudentClasses(user._id));
     }
-  }, [dispatch, user]);
+  }, [dispatch, user?._id]);
 
   useEffect(() => {
     const interval = setInterval(() => {
