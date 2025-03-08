@@ -36,6 +36,23 @@ export const markAttendance = async (req, res) => {
         .json({ message: "frequency do not match. Attendance not marked." });
     }
 
+    // Call external API for face recognition
+    // const frontendAppUrl = "https://face-recognition-six-gilt.vercel.app/api/recognize"; // Replace with actual frontend API URL
+
+    // try {
+    //   const frontendResponse = await fetch(frontendAppUrl, {
+    //     method: "POST",
+    //     headers: { "Content-Type": "application/json" },
+    //     body: JSON.stringify({ userId }),
+    //   });
+
+    //   const result = await frontendResponse.json();
+
+    //   // Check if face recognition was successful
+    //   if (!result || result.confidence < 0.6 || result.blinks<=1) {
+    //     return res.status(400).json({ message: "Face recognition failed. Attendance not marked." });
+    //   }
+
     // ✅ Mark attendance for today
     const today = new Date().toISOString().split("T")[0]; // Get YYYY-MM-DD format
     let attendanceEntry = classData.attendance.find(
@@ -66,3 +83,20 @@ export const markAttendance = async (req, res) => {
 };
 
 
+const faceRecognitionResponse = await fetch("https://api.example.com/face-recognition", {
+  method: "POST",
+  headers: {
+  "Content-Type": "application/json",
+  },
+  body: JSON.stringify({ userId, detectedfrequency }),
+});
+
+if (!faceRecognitionResponse.ok) {
+  return res.status(400).json({ message: "Face recognition failed. Attendance not marked." });
+}
+
+const faceRecognitionResult = await faceRecognitionResponse.json();
+
+if (!faceRecognitionResult.success) {
+  return res.status(400).json({ message: "Face recognition did not match. Attendance not marked." });
+}

@@ -76,12 +76,12 @@
 
 # # -e .
 
-Flask>=2.0.1
-numpy>=1.19.5
-opencv-python-headless>=4.5.3
-dlib>=19.22.0
-deepface>=0.0.79
-python-dotenv>=0.19.0
-gunicorn>=20.1.0
+Flask
+numpy
+opencv-python-headless
+dlib
+deepface
+python-dotenv
+gunicorn
 pymongo
 cloudinary
