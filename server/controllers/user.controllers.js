@@ -5,9 +5,11 @@ const registerUser = async (req, res, next) => {
   try {
     console.log("Received Data:", req.body); // Debugging
 
+
     const { fullName, email, password, role, phone } = req.body;
 
     if (!fullName || !email || !password || !role || !phone) {
+
       return next(new AppError("All fields are required", 400));
     }
 

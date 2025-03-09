@@ -4,6 +4,8 @@ import { getTeacherClasses, createClass, generatefrequency } from "../redux/slic
 import { fetchAllStudents } from "../redux/slices/authSlice";
 import { playSound } from "../helpers/playSound";
 import NavBar from "../components/NavBar";
+import OfflineToggle from "../components/OfflineToggle";
+import { sendFrequencySMS, storeOfflineFrequency } from "../utils/offlineMode";
 
 const generateRandomFrequency = () => {
   const minFreq = 1000; // 1 kHz
@@ -22,9 +24,9 @@ const Teacher = () => {
   const dispatch = useDispatch();
   const user = useSelector((state) => state.auth.user.user);
   const students = useSelector((state) => state.auth.students);
-  // console.log("students",students);
+  console.log("students",students);
   const { classes, loading, error } = useSelector((state) => state.class);
-  
+  console.log(user,"user")
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newClass, setNewClass] = useState({
     className: "",  
@@ -33,6 +35,10 @@ const Teacher = () => {
   });
   const [classFrequencies, setClassFrequencies] = useState({});
   const [disabledButtons, setDisabledButtons] = useState({});
+  const [isOffline, setIsOffline] = useState(false);
+  const [studentPhone, setStudentPhone] = useState("");
+  const [showSMSForm, setShowSMSForm] = useState(false);
+  const [selectedClassId, setSelectedClassId] = useState(null);
 
   useEffect(() => {
     if (user?._id) {
@@ -61,23 +67,46 @@ const Teacher = () => {
         : [...prev.studentIds, studentId]
     }));
   };
+  console.log("classes",classes);
+  const handleOfflineModeChange = (offline) => {
+    setIsOffline(offline);
+  };
 
   const handleGenerateFrequency = async (classId) => {
     setDisabledButtons(prev => ({ ...prev, [classId]: true }));
     setTimeout(() => {
       setDisabledButtons(prev => ({ ...prev, [classId]: false }));
-    }, 5000); // Disable button for 5 seconds
+    }, 5000);
 
-    const newFrequency =await  generateRandomFrequency();
-    console.log(newFrequency,"frequency");
-    const result = await dispatch(generatefrequency({ 
-      classId, 
-      teacherId: user._id,
-      frequency: newFrequency // Send the generated frequency to backend
-    }));
-    if (generatefrequency.fulfilled.match(result)) {
-      console.log(result.payload,"loaded");
-      setClassFrequencies(prev => ({ ...prev, [classId]: result.payload }));
+    const newFrequency = await generateRandomFrequency();
+    
+    if (isOffline) {
+      setSelectedClassId(classId);
+      setShowSMSForm(true);
+      setClassFrequencies(prev => ({ ...prev, [classId]: newFrequency }));
+      storeOfflineFrequency(newFrequency);
+    } else {
+      const result = await dispatch(generatefrequency({ 
+        classId, 
+        teacherId: user._id,
+        frequency: newFrequency
+      }));
+      if (generatefrequency.fulfilled.match(result)) {
+        setClassFrequencies(prev => ({ ...prev, [classId]: result.payload }));
+      }
+    }
+  };
+
+  const handleSendSMS = async () => {
+    if (!studentPhone || !selectedClassId) return;
+
+    const frequency = classFrequencies[selectedClassId];
+    const success = await sendFrequencySMS(frequency, studentPhone);
+    
+    if (success) {
+      setShowSMSForm(false);
+      setStudentPhone("");
+      setSelectedClassId(null);
     }
   };
 
@@ -85,7 +114,10 @@ const Teacher = () => {
     <div>
       <NavBar />
       <div className="p-6">
-        <h1 className="text-2xl font-bold mb-4">Teacher Dashboard</h1>
+        <div className="flex justify-between items-center mb-4">
+          <h1 className="text-2xl font-bold">Teacher Dashboard</h1>
+          <OfflineToggle onModeChange={handleOfflineModeChange} />
+        </div>
 
         {/* Create Class Button */}
         <button
@@ -207,13 +239,48 @@ const Teacher = () => {
           </div>
         )}
 
+        {/* SMS Form Modal */}
+        {showSMSForm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+              <h2 className="text-xl font-semibold mb-4">Send Frequency via SMS</h2>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Student Phone Number
+                </label>
+                <input
+                  type="tel"
+                  value={studentPhone}
+                  onChange={(e) => setStudentPhone(e.target.value)}
+                  placeholder="Enter phone number"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                />
+              </div>
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => setShowSMSForm(false)}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSendSMS}
+                  className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+                >
+                  Send SMS
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Classes List */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
           {classes.map((cls) => (
             <div key={cls._id} className="border rounded-lg p-4 shadow">
               <h3 className="font-bold text-lg">{cls.className}</h3>
               <p className="text-gray-600">Time: {new Date(cls.time).toLocaleString()}</p>
-              <p className="text-gray-600">Students: {cls.studentList.length}</p>
+              <p className="text-gray-600">Students: {cls.studentList?.length}</p>
               <button
                 onClick={() => handleGenerateFrequency(cls._id)}
                 className="bg-green-500 text-white px-4 py-2 rounded mt-2 mr-2"
