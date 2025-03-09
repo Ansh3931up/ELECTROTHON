@@ -8,6 +8,8 @@ import { getStudentClasses, getfrequencyByClassId } from "../redux/slices/classS
 import { checkAndRequestPermissions, checkDeviceCapabilities } from '../utils/permissions';
 import { smsReceiver } from "../utils/smsReceiver";
 
+const API_URL = 'http://localhost:3000'; // Match your Flask server port
+
 const Student = () => {
   const dispatch = useDispatch();
   const user = useSelector((state) => state.auth.user.user);
@@ -34,6 +36,8 @@ const Student = () => {
   const [showImageCapture, setShowImageCapture] = useState(false);
   const [captureStatus, setCaptureStatus] = useState('idle');
   const [trainingStatus, setTrainingStatus] = useState('idle'); // 'idle', 'training', 'success', 'failed'
+  const [frequencyMatched, setFrequencyMatched] = useState({});
+  const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   console.log("classes1111",classes);
 
 
@@ -131,6 +135,8 @@ const Student = () => {
     setLoadingStates(prev => ({ ...prev, fetchFrequency: true }));
     setSelectedClassId(classId);
     setStatus("Fetching frequency...");
+    // Add to handleFetchFrequency
+    setFrequencyMatched(prev => ({ ...prev, [classId]: false }));
 
     try {
       if (isOffline) {
@@ -171,29 +177,11 @@ const Student = () => {
         storedFrequency,
         async (isDetected) => {
           if (isDetected) {
-            try {
-              // Send attendance data to server
-              const response = await fetch('/api/v1/attendance/mark', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  userId: user._id,
-                  classId: classId,
-                  detectedfrequency: storedFrequency[0] // Send the detected frequency
-                })
-              });
-
-              if (!response.ok) {
-                throw new Error('Failed to mark attendance');
-              }
-
-              setStatus("Attendance marked successfully! ✅");
-            } catch (error) {
-              console.error('Error marking attendance:', error);
-              setStatus("Failed to mark attendance. Please try again.");
-            }
+            setFrequencyMatched(prev => ({
+              ...prev,
+              [classId]: true
+            }));
+            setStatus("Frequency matched! Please verify your face.");
           } else {
             setStatus("Frequency detection failed. Please try again.");
           }
@@ -213,19 +201,25 @@ const Student = () => {
 
   const startFaceVerification = async () => {
     try {
-      // Stop any existing streams
+      setVerificationStatus('verifying');
+      
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
       }
   
-      // Get the recognition result by opening in a new window
-      const recognitionWindow = window.open(`http://localhost:3000/recognize?userId=${user._id}`, 'Face Recognition', 'width=800,height=600');
-      
-      // Create a promise to handle the recognition result
+      const recognitionWindow = window.open(
+        `${API_URL}/recognize?userId=${user._id}`,
+        'Face Recognition',
+        'width=800,height=600,toolbar=no,location=no,status=no,menubar=no,scrollbars=yes,resizable=yes'
+      );
+  
+      if (!recognitionWindow) {
+        throw new Error('Popup blocked. Please allow popups for this site.');
+      }
+  
       const recognitionResult = await new Promise((resolve, reject) => {
-        // Listen for message from recognition window
-        window.addEventListener('message', function handleMessage(event) {
-          if (event.origin !== 'http://localhost:3000') return;
+        const handleMessage = (event) => {
+          if (event.origin !== API_URL) return;
           
           window.removeEventListener('message', handleMessage);
           recognitionWindow.close();
@@ -235,46 +229,65 @@ const Student = () => {
           } else {
             resolve(event.data);
           }
-        });
+        };
   
-        // Handle window close
+        window.addEventListener('message', handleMessage);
         recognitionWindow.onbeforeunload = () => {
+          window.removeEventListener('message', handleMessage);
           reject(new Error('Face verification cancelled'));
         };
       });
   
-      // Handle the recognition result
       if (recognitionResult.verified) {
-        setVerificationStatus('success');
-        setStatus('Face verification successful! Marking attendance...');
+        setVerificationStatus('verifying');
         
-        // Make API call to mark attendance
-        const attendanceResponse = await fetch('/api/attendance', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            studentId: user._id,
-            classId: selectedClassId,
-            verificationData: recognitionResult
-          }),
-        });
-  
-        if (!attendanceResponse.ok) {
-          throw new Error('Failed to mark attendance');
+        try {
+          const response = await fetch(`${API_URL}/api/attendance`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: JSON.stringify({
+              studentId: user._id,
+              classId: selectedClassId,
+              verificationData: recognitionResult
+            }),
+          });
+      
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to mark attendance');
+          }
+      
+          await response.json();
+          setVerificationStatus('success');
+          setShowSuccessDialog(true);
+          
+          // Reset states
+          setFrequencyMatched(prev => ({
+            ...prev,
+            [selectedClassId]: false
+          }));
+      
+          // Hide success dialog after 3 seconds
+          setTimeout(() => {
+            setShowSuccessDialog(false);
+            setVerificationStatus('idle');
+          }, 3000);
+      
+        } catch (error) {
+          throw new Error(`Attendance marking failed: ${error.message}`);
         }
-  
-        setStatus('Attendance marked successfully!');
       } else {
         setVerificationStatus('failed');
-        setStatus('Face verification failed. Please try again.');
+        setTimeout(() => setVerificationStatus('idle'), 2000);
       }
   
     } catch (error) {
       console.error('Face verification error:', error);
       setVerificationStatus('failed');
-      setStatus(`Face verification failed: ${error.message}`);
+      setTimeout(() => setVerificationStatus('idle'), 2000);
     }
   };
 
@@ -678,6 +691,47 @@ const startTraining = async () => {
                       <span key={idx} className="font-mono">{freq} Hz</span>
                     ))}
                   </div>
+                  
+                  {frequencyMatched[cls._id] && (
+                    <motion.button
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.3 }}
+                      onClick={startFaceVerification}
+                      className={`mt-3 w-full flex items-center justify-center px-4 py-2 rounded-lg 
+                        ${verificationStatus === 'verifying'
+                          ? 'bg-yellow-500 cursor-not-allowed'
+                          : 'bg-blue-500 hover:bg-blue-600'
+                        } text-white font-medium transition-all duration-300`}
+                      disabled={verificationStatus === 'verifying'}
+                    >
+                      <span className="flex items-center space-x-2">
+                        {verificationStatus === 'verifying' ? (
+                          <>
+                            <LoadingSpinner />
+                            <span>Verifying...</span>
+                          </>
+                        ) : (
+                          <>
+                            <svg 
+                              className="w-5 h-5" 
+                              fill="none" 
+                              stroke="currentColor" 
+                              viewBox="0 0 24 24"
+                            >
+                              <path 
+                                strokeLinecap="round" 
+                                strokeLinejoin="round" 
+                                strokeWidth={2} 
+                                d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                              />
+                            </svg>
+                            <span>Verify Face for Attendance</span>
+                          </>
+                        )}
+                      </span>
+                    </motion.button>
+                  )}
                 </div>
               )}
             </motion.div>
@@ -758,6 +812,48 @@ const startTraining = async () => {
                     Verify Face
                   </button>
                 </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Add the success dialog component in your return statement, just before the closing </div> */}
+        {showSuccessDialog && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          >
+            <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm mx-4 relative">
+              <div className="text-center">
+                <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
+                  <svg 
+                    className="h-8 w-8 text-green-500" 
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path 
+                      strokeLinecap="round" 
+                      strokeLinejoin="round" 
+                      strokeWidth="2" 
+                      d="M5 13l4 4L19 7"
+                    />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  Attendance Marked Successfully!
+                </h3>
+                <p className="text-sm text-gray-500">
+                  Your attendance has been recorded for this class.
+                </p>
+                <button
+                  onClick={() => setShowSuccessDialog(false)}
+                  className="mt-4 inline-flex justify-center px-4 py-2 text-sm font-medium text-green-900 bg-green-100 border border-transparent rounded-md hover:bg-green-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-green-500"
+                >
+                  Got it, thanks!
+                </button>
               </div>
             </div>
           </motion.div>

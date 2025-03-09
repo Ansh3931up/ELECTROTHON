@@ -24,10 +24,10 @@ class FaceRecognizer:
         self.tolerance = tolerance
         self.known_face_encodings = []
         self.known_face_names = []
+        self.model_loaded = False
         self.preprocessor = FacePreprocessor()
         self.liveness_confirmed = False
         self.recognition_confirmed = False
-        self.model_loaded = False
         self.detector = dlib.get_frontal_face_detector()
         self.predictor = dlib.shape_predictor("data/shape_predictor/shape_predictor_68_face_landmarks.dat")
         self.EYE_AR_THRESH = 0.3
@@ -186,18 +186,10 @@ class FaceRecognizer:
                 'success': False,
                 'message': 'Model not loaded'
             }
-
-        # Check for blinks
-        blink_detected = self.detect_blink(image)
-        if not blink_detected:
-            return {
-                'success': False,
-                'message': 'Liveness check failed - please blink naturally'
-            }
-
-        # Convert image to RGB (face_recognition uses RGB)
+        
+        # Convert image to RGB
         rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-
+        
         # Find faces in the image
         face_locations = face_recognition.face_locations(rgb_image)
         
@@ -222,9 +214,8 @@ class FaceRecognizer:
             face_encodings[0], 
             tolerance=self.tolerance
         )
-        
+
         if True in matches:
-            # Find distances to all known faces
             face_distances = face_recognition.face_distance(
                 self.known_face_encodings, 
                 face_encodings[0]
@@ -233,17 +224,17 @@ class FaceRecognizer:
             
             if matches[best_match_index]:
                 confidence = 1 - face_distances[best_match_index]
-                if confidence > 0.55:  # Confidence threshold
+                if confidence > self.tolerance:
                     return {
                         'success': True,
+                        'verified': True,
                         'userId': self.known_face_names[best_match_index],
-                        'confidence': float(confidence),
-                        'liveness_confirmed': True,
-                        'blinks': self.blink_counter  # Return current blink count
+                        'confidence': float(confidence)
                     }
 
         return {
             'success': False,
+            'verified': False,
             'message': 'Face not recognized or confidence too low'
         }
 

@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify, render_template
+from flask_cors import CORS
 import os
 from src.CMS.face_recognition.capture import FaceImageCapture
 from src.CMS.face_recognition.train import FaceModelTrainer
@@ -22,6 +23,13 @@ MONGODB_URI = os.getenv('MONGODB_URI')
 CLOUDINARY_CLOUD_NAME = os.getenv('CLOUDINARY_CLOUD_NAME')
 
 app = Flask(__name__)
+CORS(app, resources={
+    r"/*": {
+        "origins": ["http://localhost:5173"],  # Update this to match your React dev server
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"]
+    }
+})
 
 # Configure Cloudinary
 cloudinary.config(
@@ -52,7 +60,10 @@ def train_page():
 
 @app.route('/recognize')
 def recognize_page():
-    return render_template('recognize.html')
+    user_id = request.args.get('userId')
+    if not user_id:
+        return render_template('recognize.html', error='No user ID provided')
+    return render_template('recognize.html', user_id=user_id)
 
 @app.route('/api/capture', methods=['POST'])
 def capture_face():
@@ -236,6 +247,7 @@ def recognize_face():
 
         # Perform recognition
         result = face_recognizer.recognize_single_face(image)
+        print(jsonify(result))
         return jsonify(result)
 
     except Exception as e:
@@ -243,6 +255,27 @@ def recognize_face():
             'success': False,
             'message': str(e)
         }), 500
+
+@app.route('/api/attendance', methods=['POST', 'OPTIONS'])
+def mark_attendance():
+    if request.method == 'OPTIONS':
+        return jsonify({"success": True})
+        
+    try:
+        data = request.json
+        if not data or 'studentId' not in data or 'classId' not in data:
+            return jsonify({'error': 'Missing required fields'}), 400
+
+        # Your attendance marking logic here
+        # ...
+
+        return jsonify({
+            'success': True,
+            'message': 'Attendance marked successfully'
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=3000)

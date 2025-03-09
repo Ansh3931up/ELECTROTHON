@@ -40,9 +40,6 @@
             cursor: pointer;
             transition: background-color 0.3s;
         }
-        button:hover {
-            background-color: #0056b3;
-        }
         button:disabled { 
             background-color: #ccc;
         }
@@ -68,6 +65,7 @@
     <div class="video-container">
         <video id="videoElement" autoplay playsinline></video>
     </div>
+
     <div class="button-group">
         <button onclick="startRecognition()" id="startRecognitionBtn">Start Recognition</button>
         <button onclick="stopRecognition()" id="stopRecognitionBtn" disabled>Stop Recognition</button>
@@ -77,9 +75,10 @@
     <script>
         let videoStream;
         let recognitionInterval;
-        const userId = new URLSearchParams(window.location.search).get('userId');
+        const userId = '{{ user_id }}' || new URLSearchParams(window.location.search).get('userId');
         
-        document.getElementById('userIdDisplay').textContent = userId;
+        document.getElementById('userIdDisplay').textContent = userId || 'Not provided';
+        const API_BASE_URL = window.location.origin;
 
         async function startRecognition() {
             try {
@@ -112,7 +111,7 @@
             canvas.getContext('2d').drawImage(video, 0, 0);
             
             try {
-                const response = await fetch('/api/recognize', {
+                const response = await fetch(`${API_BASE_URL}/api/recognize`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -124,25 +123,18 @@
                 });
                 
                 const data = await response.json();
-                if (data.success) {
-                    showStatus('recognitionStatus', 
-                        `Face recognized!\nUser ID: ${data.userId}\nConfidence: ${(data.confidence * 100).toFixed(2)}%\nBlinks: ${data.blinks}`, 
-                        true
-                    );
-                    
-                    // Send result back to parent window
+                if (data.success && data.verified) {
                     window.opener.postMessage({
                         verified: true,
                         confidence: data.confidence,
-                        userId: data.userId,
-                        liveness_confirmed: data.liveness_confirmed,
-                        blinks: data.blinks
-                    }, '*');  // Changed to allow any origin for development
-
-                    // Stop recognition after successful verification
-                    if (data.confidence > 0.55) {
-                        stopRecognition();
-                    }
+                        userId: data.userId
+                    }, '*');
+                    
+                    showStatus('recognitionStatus', 
+                        `Face verified!\nConfidence: ${(data.confidence * 100).toFixed(2)}%`, 
+                        true
+                    );
+                    stopRecognition();
                 } else {
                     showStatus('recognitionStatus', data.message || 'Face not recognized', false);
                 }
@@ -157,7 +149,6 @@
             element.className = `status ${success ? 'success' : 'error'}`;
         }
 
-        // Initialize
         if (!userId) {
             showStatus('recognitionStatus', 'No User ID provided!', false);
             document.querySelectorAll('button').forEach(btn => btn.disabled = true);
