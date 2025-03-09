@@ -4,7 +4,7 @@ import { Network } from '@capacitor/network';
 import axios from 'axios';
 
 const SECRET_KEY = import.meta.env.VITE_SECRET_KEY || 'your-default-secret-key';
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5015';
+const API_URL = import.meta.env.VITE_API_URL || 'https://electrothon.onrender.com';
 
 export const getOfflineMode = () => {
   return localStorage.getItem('appMode') === 'offline';

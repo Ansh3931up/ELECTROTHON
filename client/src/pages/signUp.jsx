@@ -91,13 +91,9 @@ const Signup = () => {
       const result = await dispatch(signupUser(signupData)).unwrap();
       setSubmitSuccess(true);
       
-      // Store user data
-      localStorage.setItem('userRole', result.role);
-      localStorage.setItem('token', result.token);
-      
-      // Redirect after a short delay to show success message
+      // Show success message and redirect to login page after a short delay
       setTimeout(() => {
-        window.location.href = result.role === "teacher" ? "/teacher" : "/student";
+        navigate('/login');
       }, 1500);
       
     } catch (error) {
