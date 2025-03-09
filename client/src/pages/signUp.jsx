@@ -1,26 +1,28 @@
-import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from 'react-router-dom';
-import axios from "axios";
-
+import { useState } from "react";
 import { signupUser } from "../redux/slices/authSlice";
 
 const Signup = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { loading, error } = useSelector((state) => state.auth);
+  const { error } = useSelector((state) => state.auth);
 
   const [formData, setFormData] = useState({
+    fullName: "",
     email: "",
     password: "",
     confirmPassword: "",
+    phone: "",
     role: "student",
   });
 
   const [validationErrors, setValidationErrors] = useState({
+    fullName: '',
     email: '',
     password: '',
-    confirmPassword: ''
+    confirmPassword: '',
+    phone: ''
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -33,9 +35,21 @@ const Signup = () => {
   const validateForm = () => {
     const errors = {};
     
+    // Full Name validation
+    if (formData.fullName.length < 5) {
+      errors.fullName = 'Full name must be at least 5 characters long';
+    } else if (formData.fullName.length > 30) {
+      errors.fullName = 'Full name must not exceed 30 characters';
+    }
+
     // Email validation
     if (!formData.email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
       errors.email = 'Please enter a valid email address';
+    }
+    
+    // Phone validation
+    if (!formData.phone.match(/^\d{10}$/)) {
+      errors.phone = 'Please enter a valid 10-digit phone number';
     }
     
     // Enhanced password validation
@@ -62,7 +76,19 @@ const Signup = () => {
     
     setIsSubmitting(true);
     try {
-      const result = await dispatch(signupUser(formData)).unwrap();
+      // Remove confirmPassword before sending to backend
+      const { confirmPassword, ...signupData } = formData;
+      console.log('Form Data before submission:', formData);
+      console.log('Data being sent to backend:', signupData);
+      console.log('Checking required fields:', {
+        fullName: !!signupData.fullName,
+        email: !!signupData.email,
+        password: !!signupData.password,
+        phone: !!signupData.phone,
+        role: !!signupData.role
+      });
+      
+      const result = await dispatch(signupUser(signupData)).unwrap();
       setSubmitSuccess(true);
       
       // Store user data
@@ -107,6 +133,25 @@ const Signup = () => {
 
           <div className="rounded-md shadow-sm space-y-4">
             <div>
+              <label htmlFor="fullName" className="block text-sm font-medium text-gray-700">
+                Full Name
+              </label>
+              <input
+                id="fullName"
+                name="fullName"
+                type="text"
+                required
+                value={formData.fullName}
+                onChange={handleChange}
+                className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                placeholder="Full Name"
+              />
+              {validationErrors.fullName && (
+                <p className="text-red-500 text-xs mt-1">{validationErrors.fullName}</p>
+              )}
+            </div>
+
+            <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700">
                 Email address
               </label>
@@ -122,6 +167,27 @@ const Signup = () => {
               />
               {validationErrors.email && (
                 <p className="text-red-500 text-xs mt-1">{validationErrors.email}</p>
+              )}
+            </div>
+
+            <div>
+              <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
+                Phone Number
+              </label>
+              <input
+                id="phone"
+                name="phone"
+                type="tel"
+                required
+                value={formData.phone}
+                onChange={handleChange}
+                className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                placeholder="10-digit phone number"
+                maxLength="10"
+                pattern="\d{10}"
+              />
+              {validationErrors.phone && (
+                <p className="text-red-500 text-xs mt-1">{validationErrors.phone}</p>
               )}
             </div>
 
