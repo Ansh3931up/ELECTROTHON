@@ -24,6 +24,7 @@
     "multer": "^1.4.5-lts.1",
     "nodemailer": "^6.10.0",
     "nodemon": "^3.1.9",
-    "server": "file:"
+    "server": "file:",
+    "twilio": "^5.4.5"
   }
 }
