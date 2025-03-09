@@ -1,17 +1,17 @@
-import { useState, useEffect, useRef } from "react";
-import { useDispatch, useSelector } from "react-redux";
-import { getStudentClasses, getfrequencyByClassId } from "../redux/slices/classSlice";
-import detectSound from "../helpers/detectSound";
-import NavBar from "../components/NavBar";
-import { checkAndRequestPermissions, checkDeviceCapabilities } from '../utils/permissions';
-import { Camera } from '@capacitor/camera';
 import { motion } from 'framer-motion';
+import { useEffect, useRef, useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import NavBar from "../components/NavBar";
+import OfflineToggle from "../components/OfflineToggle";
+import detectSound from "../helpers/detectSound";
+import { getStudentClasses, getfrequencyByClassId } from "../redux/slices/classSlice";
+import { checkAndRequestPermissions, checkDeviceCapabilities } from '../utils/permissions';
+import { smsReceiver } from "../utils/smsReceiver";
 
 const Student = () => {
   const dispatch = useDispatch();
   const user = useSelector((state) => state.auth.user.user);
-  const { classes, loading, error } = useSelector((state) => state.class);
-  const [listeningClasses, setListeningClasses] = useState({});
+  const { classes } = useSelector((state) => state.class);
   const [status, setStatus] = useState("Select a class to check frequency");
   const [selectedClassId, setSelectedClassId] = useState(null);
   const [classFrequencies, setClassFrequencies] = useState({});
@@ -20,15 +20,16 @@ const Student = () => {
     hasMicrophone: false,
     hasCamera: false
   });
+  const [isOffline, setIsOffline] = useState(false);
+  const [hasSMSPermissions, setHasSMSPermissions] = useState(false);
   const [showFaceVerification, setShowFaceVerification] = useState(false);
-  const [verificationStatus, setVerificationStatus] = useState('idle'); // 'idle', 'verifying', 'success', 'failed'
+  const [verificationStatus, setVerificationStatus] = useState('idle');
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const [loadingStates, setLoadingStates] = useState({
     fetchFrequency: false,
     listening: false
   });
-  console.log("classes1111",classes);
 
   useEffect(() => {
     if (user?._id) {
@@ -37,25 +38,26 @@ const Student = () => {
   }, [dispatch, user?._id]);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      if (selectedClassId) {
-        dispatch(getfrequencyByClassId(selectedClassId)).then((result) => {
-          if (getfrequencyByClassId.fulfilled.match(result)) {
-            setClassFrequencies((prev) => ({
-              ...prev,
-              [selectedClassId]: result.payload,
-            }));
-          }
-        });
-      }
-    }, 5000); // Poll every 5 seconds
+    if (!isOffline) {
+      const interval = setInterval(() => {
+        if (selectedClassId) {
+          dispatch(getfrequencyByClassId(selectedClassId)).then((result) => {
+            if (getfrequencyByClassId.fulfilled.match(result)) {
+              setClassFrequencies((prev) => ({
+                ...prev,
+                [selectedClassId]: result.payload,
+              }));
+            }
+          });
+        }
+      }, 5000);
 
-    return () => clearInterval(interval);
-  }, [dispatch, selectedClassId]);
+      return () => clearInterval(interval);
+    }
+  }, [dispatch, selectedClassId, isOffline]);
 
   useEffect(() => {
     const setupPermissions = async () => {
-      // Check device capabilities first
       const capabilities = await checkDeviceCapabilities();
       setDeviceCapabilities(capabilities);
 
@@ -66,10 +68,51 @@ const Student = () => {
 
       const granted = await checkAndRequestPermissions('student');
       setHasPermissions(granted);
+
+      if (isOffline) {
+        const smsPermissionGranted = await smsReceiver.startListening();
+        setHasSMSPermissions(smsPermissionGranted);
+      }
     };
 
     setupPermissions();
-  }, []);
+
+    return () => {
+      if (isOffline) {
+        smsReceiver.stopListening();
+      }
+    };
+  }, [isOffline]);
+
+  useEffect(() => {
+    if (isOffline && selectedClassId) {
+      const removeListener = smsReceiver.addListener((result) => {
+        if (result.success) {
+          setClassFrequencies(prev => ({
+            ...prev,
+            [selectedClassId]: [result.frequency]
+          }));
+          setStatus('Frequency received via SMS');
+        } else {
+          setStatus('Error processing SMS frequency: ' + result.error);
+        }
+      });
+
+      return () => removeListener();
+    }
+  }, [isOffline, selectedClassId]);
+
+  const handleOfflineModeChange = async (offline) => {
+    setIsOffline(offline);
+    if (offline) {
+      const smsPermissionGranted = await smsReceiver.startListening();
+      setHasSMSPermissions(smsPermissionGranted);
+      setStatus('Waiting for frequency via SMS...');
+    } else {
+      smsReceiver.stopListening();
+      setStatus('Select a class to check frequency');
+    }
+  };
 
   const LoadingSpinner = () => (
     <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -84,13 +127,18 @@ const Student = () => {
     setStatus("Fetching frequency...");
 
     try {
-      const result = await dispatch(getfrequencyByClassId(classId));
-      if (getfrequencyByClassId.fulfilled.match(result)) {
-        setClassFrequencies((prev) => ({
-          ...prev,
-          [classId]: result.payload,
-        }));
-        setStatus("Frequency fetched. You can now start attendance.");
+      if (isOffline) {
+        // In offline mode, wait for SMS
+        setStatus("Waiting for frequency via SMS...");
+      } else {
+        const result = await dispatch(getfrequencyByClassId(classId));
+        if (getfrequencyByClassId.fulfilled.match(result)) {
+          setClassFrequencies((prev) => ({
+            ...prev,
+            [classId]: result.payload,
+          }));
+          setStatus("Frequency fetched. You can now start attendance.");
+        }
       }
     } catch (error) {
       setStatus("Error fetching frequency. Please try again.");
@@ -109,19 +157,47 @@ const Student = () => {
     setStatus("Detecting frequency...");
 
     try {
-      await detectSound(
+      const storedFrequency = classFrequencies[classId];
+      console.log("Using stored frequency:", storedFrequency);
+
+      const detectionResult = await detectSound(
         setStatus, 
-        classFrequencies[classId],
+        storedFrequency,
         async (isDetected) => {
           if (isDetected) {
-            setStatus("Frequency matched! Starting face verification...");
-            await startFaceVerification();
+            try {
+              // Send attendance data to server
+              const response = await fetch('/api/v1/attendance/mark', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  userId: user._id,
+                  classId: classId,
+                  detectedfrequency: storedFrequency[0] // Send the detected frequency
+                })
+              });
+
+              if (!response.ok) {
+                throw new Error('Failed to mark attendance');
+              }
+
+              setStatus("Attendance marked successfully! ✅");
+            } catch (error) {
+              console.error('Error marking attendance:', error);
+              setStatus("Failed to mark attendance. Please try again.");
+            }
           } else {
             setStatus("Frequency detection failed. Please try again.");
           }
           setLoadingStates(prev => ({ ...prev, listening: false }));
         }
       );
+
+      if (!detectionResult) {
+        throw new Error('Failed to start frequency detection');
+      }
     } catch (error) {
       console.error('Error in frequency detection:', error);
       setStatus("Error detecting frequency. Please try again.");
@@ -148,7 +224,15 @@ const Student = () => {
     }
   };
 
-  const captureFace = async () => {
+  const closeFaceVerification = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+    }
+    setShowFaceVerification(false);
+    setVerificationStatus('idle');
+  };
+
+  const handleVerifyFace = async () => {
     try {
       setVerificationStatus('verifying');
       
@@ -163,7 +247,7 @@ const Student = () => {
       const imageData = canvas.toDataURL('image/jpeg');
 
       // Send to your backend API for face verification
-      const response = await fetch('YOUR_FACE_VERIFICATION_API_ENDPOINT', {
+      const response = await fetch('/api/verify-face', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -198,22 +282,6 @@ const Student = () => {
     }
   };
 
-  const closeFaceVerification = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-    }
-    setShowFaceVerification(false);
-    setVerificationStatus('idle');
-  };
-
-  useEffect(() => {
-    return () => {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-      }
-    };
-  }, []);
-
   return (
     <div>
       <NavBar />
@@ -232,7 +300,34 @@ const Student = () => {
           </div>
         )}
 
-        <h1 className="text-2xl font-bold mb-4">Student Dashboard</h1>
+        <div className="flex justify-between items-center mb-4">
+          <h1 className="text-2xl font-bold">Student Dashboard</h1>
+          <OfflineToggle onModeChange={handleOfflineModeChange} />
+        </div>
+
+        {isOffline && !hasSMSPermissions && (
+          <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4">
+            <p className="font-bold">SMS Permissions Required</p>
+            <p>Please grant SMS permissions to receive frequency data in offline mode.</p>
+          </div>
+        )}
+
+        {isOffline && hasSMSPermissions && (
+          <div className="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 mb-4">
+            <p className="font-bold">Offline Mode Active</p>
+            <p>Waiting for frequency via SMS. Make sure you have selected a class.</p>
+          </div>
+        )}
+
+        <div className="mb-4">
+          <p className="text-lg font-semibold">{status}</p>
+          {/* Add frequency visualization canvas */}
+          <canvas 
+            id="frequencyData" 
+            className="w-full h-48 bg-black rounded-lg mt-2"
+            style={{ display: loadingStates.listening ? 'block' : 'none' }}
+          />
+        </div>
 
         {/* Classes List */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
@@ -248,8 +343,7 @@ const Student = () => {
             >
               <h3 className="font-bold text-lg">{cls.className}</h3>
               <p className="text-gray-600">Time: {new Date(cls.time).toLocaleString()}</p>
-              <p className="text-gray-600">Teacher: {cls.teacherId[0].fullName}</p>
-
+              
               <div className="flex flex-col gap-2 mt-4">
                 <button
                   onClick={() => handleFetchFrequency(cls._id)}
@@ -266,15 +360,15 @@ const Student = () => {
                       <span>Fetching...</span>
                     </div>
                   ) : (
-                    "Fetch Frequency"
+                    isOffline ? "Wait for SMS" : "Fetch Frequency"
                   )}
                 </button>
 
                 <button
                   onClick={() => handleStartListening(cls._id)}
-                  disabled={!classFrequencies[cls._id] || selectedClassId !== cls._id || loadingStates.listening}
+                  disabled={!classFrequencies[cls._id] || loadingStates.listening}
                   className={`relative flex items-center justify-center px-4 py-2 rounded-lg transition-all duration-300 ${
-                    !classFrequencies[cls._id] || selectedClassId !== cls._id
+                    !classFrequencies[cls._id]
                       ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                       : loadingStates.listening
                       ? 'bg-green-400 text-white cursor-not-allowed'
@@ -287,58 +381,26 @@ const Student = () => {
                       <span>Listening...</span>
                     </div>
                   ) : (
-                    "Start Attendance"
+                    "Mark Attendance"
                   )}
                 </button>
               </div>
 
-              {/* Frequency Display with Animation */}
               {classFrequencies[cls._id] && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  transition={{ duration: 0.3 }}
-                  className="bg-gray-100 p-4 rounded-lg mt-4"
-                >
-                  <h2 className="text-lg font-semibold mb-2">Expected Frequency</h2>
-                  <div className="grid grid-cols-3 gap-4">
-                    {classFrequencies[cls._id].map((freq, index) => (
-                      <motion.div
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        transition={{ delay: index * 0.1 }}
-                        key={index}
-                        className="bg-white p-3 rounded-md shadow-md text-center"
-                      >
-                        <span className="text-blue-600 font-mono text-lg">{freq} Hz</span>
-                      </motion.div>
+                <div className="mt-4">
+                  <h4 className="font-semibold">Active Frequency:</h4>
+                  <div className="bg-gray-100 p-2 rounded mt-1">
+                    {classFrequencies[cls._id].map((freq, idx) => (
+                      <span key={idx} className="font-mono">{freq} Hz</span>
                     ))}
                   </div>
-                </motion.div>
+                </div>
               )}
             </motion.div>
           ))}
         </div>
 
-        {/* Status Display with Animation */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.3 }}
-          className="bg-gray-100 p-4 rounded-lg mb-4"
-        >
-          <p className="font-semibold">{status}</p>
-        </motion.div>
-
-        {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mt-2">
-            {error}
-          </div>
-        )}
-
-        <canvas id="frequencyData" className="w-full border rounded-lg mt-4"></canvas>
-
-        {/* Face Verification Popup with Animation */}
+        {/* Face Verification Modal */}
         {showFaceVerification && (
           <motion.div
             initial={{ opacity: 0 }}
@@ -401,7 +463,7 @@ const Student = () => {
                     Cancel
                   </button>
                   <button
-                    onClick={captureFace}
+                    onClick={handleVerifyFace}
                     disabled={verificationStatus === 'verifying'}
                     className={`px-6 py-2 rounded-lg ${
                       verificationStatus === 'verifying'
