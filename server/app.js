@@ -19,6 +19,7 @@ app.use(morgan("dev"));
 
 // Enable CORS
 const allowedOrigins = [
+  'https://electrothon.vercel.app',
   'http://localhost:5173',
   'http://localhost:5174',
   'https://localhost',
