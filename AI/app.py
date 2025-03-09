@@ -42,19 +42,28 @@ face_recognizer = FaceRecognizer(tolerance=0.6)
 def index():
     return render_template('index.html')
 
+@app.route('/capture')
+def capture_page():
+    return render_template('capture.html')
+
+@app.route('/train')
+def train_page():
+    return render_template('train.html')
+
+@app.route('/recognize')
+def recognize_page():
+    return render_template('recognize.html')
+
 @app.route('/api/capture', methods=['POST'])
 def capture_face():
     try:
         data = request.json
         if not data or 'image' not in data or 'userId' not in data:
-            return jsonify({'error': 'Missing image data or userId'}), 400
+            return jsonify({'error': 'Missing required fields'}), 400
 
-        try:
-            user_id = ObjectId(data['userId'])
-        except:
-            return jsonify({'error': 'Invalid user ID format'}), 400
+        user_id = data['userId']
 
-        # Verify user exists
+        # First verify user exists
         if not user_face_db.verify_user_exists(user_id):
             return jsonify({'error': 'User not found'}), 404
 
@@ -63,33 +72,34 @@ def capture_face():
         nparr = np.frombuffer(image_data, np.uint8)
         image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
-        # Create a temporary file to upload to Cloudinary
+        # Create a temporary file
         temp_path = f'temp_{datetime.now().strftime("%Y%m%d_%H%M%S")}.jpg'
         cv2.imwrite(temp_path, image)
 
         try:
-            # Upload to Cloudinary with folder structure
+            # Upload to Cloudinary
             upload_result = cloudinary.uploader.upload(
                 temp_path,
-                folder=f"face_recognition/{str(user_id)}",
+                folder=f"face_recognition/{user_id}",
                 public_id=f"face_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
             )
 
-            # Update user's face data in existing User collection
-            user_face_db.add_face_image(
-                user_id,
-                upload_result['secure_url'],
+            # Add face image to user profile
+            result = user_face_db.add_face_image(
+                user_id, 
+                upload_result['secure_url'], 
                 upload_result['public_id']
             )
+            
+            if result is None:
+                return jsonify({'error': 'Failed to update user profile'}), 500
 
             return jsonify({
                 'success': True,
-                'message': 'Face image captured and stored successfully',
-                'imageUrl': upload_result['secure_url']
+                'image_url': upload_result['secure_url']
             })
 
         finally:
-            # Ensure temporary file is removed even if upload fails
             if os.path.exists(temp_path):
                 os.remove(temp_path)
 
@@ -121,44 +131,55 @@ def get_user_images(userId):
 @app.route('/api/train', methods=['POST'])
 def train_model():
     try:
-        # Get all users and their face images from MongoDB
         users = user_face_db.get_all_users()
-        
-        # Create temporary directory for training
+        if not users:
+            return jsonify({
+                'success': False,
+                'error': 'No users with face images found'
+            }), 404
+
         temp_dir = 'temp_training'
         os.makedirs(temp_dir, exist_ok=True)
 
         try:
-            # Download images for training
+            images_processed = 0
             for user in users:
+                if 'faceData' not in user or 'faceImages' not in user['faceData']:
+                    continue
+                
                 user_dir = os.path.join(temp_dir, str(user['_id']))
                 os.makedirs(user_dir, exist_ok=True)
                 
-                for image in user['faceData']['faceImages']:
-                    # Download image from Cloudinary URL
-                    response = requests.get(image['url'])
-                    if response.status_code == 200:
-                        image_path = os.path.join(
-                            user_dir, 
-                            f"face_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
-                        )
-                        with open(image_path, 'wb') as f:
-                            f.write(response.content)
+                for image_data in user['faceData']['faceImages']:
+                    try:
+                        response = requests.get(image_data['url'])
+                        if response.status_code == 200:
+                            image_name = f"face_{image_data['captured_at'].strftime('%Y%m%d_%H%M%S')}.jpg"
+                            image_path = os.path.join(user_dir, image_name)
+                            
+                            with open(image_path, 'wb') as f:
+                                f.write(response.content)
+                            images_processed += 1
+                    except Exception as img_err:
+                        print(f"Error processing image: {img_err}")
+                        continue
 
-            # Train model
+            if images_processed == 0:
+                return jsonify({
+                    'success': False,
+                    'error': 'No images could be processed for training'
+                }), 400
+
             face_trainer.train_model(temp_dir)
             face_trainer.save_model()
-            
-            # Load the model after training
             face_recognizer.load_model()
 
             return jsonify({
                 'success': True,
-                'message': 'Model trained and loaded successfully'
+                'message': f'Model trained successfully with {images_processed} images'
             })
 
         finally:
-            # Clean up temporary directory
             import shutil
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -168,17 +189,25 @@ def train_model():
 @app.route('/api/model/status', methods=['GET'])
 def get_model_status():
     try:
-        # Get count of users from MongoDB
         users = user_face_db.get_all_users()
         total_users = len(users)
-        total_images = sum(len(user['faceData']['faceImages']) for user in users)
+        total_images = sum(
+            len(user.get('faceData', {}).get('faceImages', [])) 
+            for user in users
+        )
+        
+        last_trained = None
+        if os.path.exists(face_trainer.model_path):
+            last_trained = datetime.fromtimestamp(
+                os.path.getmtime(face_trainer.model_path)
+            ).strftime('%Y-%m-%d %H:%M:%S')
 
         return jsonify({
             'success': True,
             'modelTrained': face_recognizer.is_model_loaded(),
             'totalUsers': total_users,
             'totalImages': total_images,
-            'lastTrained': os.path.getmtime(face_recognizer.model_path) if os.path.exists(face_recognizer.model_path) else None
+            'lastTrained': last_trained
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500

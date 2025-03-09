@@ -1,0 +1,167 @@
+<!-- templates\recognize.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Face Recognition</title>
+    <style>
+        body { 
+            font-family: Arial; 
+            max-width: 800px; 
+            margin: 0 auto; 
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .video-container { 
+            width: 100%; 
+            max-width: 640px; 
+            margin: 20px auto;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        #videoElement { 
+            width: 100%; 
+            background-color: #000;
+        }
+        .button-group { 
+            display: flex; 
+            gap: 10px; 
+            margin: 20px 0;
+            justify-content: center;
+        }
+        button { 
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled { 
+            background-color: #ccc;
+        }
+        .status { 
+            margin: 10px 0;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .success { 
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .error { 
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <h1>Face Recognition</h1>
+    <h3>User ID: <span id="userIdDisplay"></span></h3>
+
+    <div class="video-container">
+        <video id="videoElement" autoplay playsinline></video>
+    </div>
+    <div class="button-group">
+        <button onclick="startRecognition()" id="startRecognitionBtn">Start Recognition</button>
+        <button onclick="stopRecognition()" id="stopRecognitionBtn" disabled>Stop Recognition</button>
+    </div>
+    <div id="recognitionStatus" class="status"></div>
+
+    <script>
+        let videoStream;
+        let recognitionInterval;
+        const userId = new URLSearchParams(window.location.search).get('userId');
+        
+        document.getElementById('userIdDisplay').textContent = userId;
+
+        async function startRecognition() {
+            try {
+                videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                document.getElementById('videoElement').srcObject = videoStream;
+                document.getElementById('startRecognitionBtn').disabled = true;
+                document.getElementById('stopRecognitionBtn').disabled = false;
+                
+                recognitionInterval = setInterval(recognizeFace, 1000);
+            } catch (err) {
+                showStatus('recognitionStatus', `Error accessing camera: ${err.message}`, false);
+            }
+        }
+
+        function stopRecognition() {
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+                document.getElementById('videoElement').srcObject = null;
+                document.getElementById('startRecognitionBtn').disabled = false;
+                document.getElementById('stopRecognitionBtn').disabled = true;
+                clearInterval(recognitionInterval);
+            }
+        }
+
+        async function recognizeFace() {
+            const video = document.getElementById('videoElement');
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+            
+            try {
+                const response = await fetch('/api/recognize', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        image: canvas.toDataURL('image/jpeg'),
+                        userId: userId
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    showStatus('recognitionStatus', 
+                        `Face recognized!\nUser ID: ${data.userId}\nConfidence: ${(data.confidence * 100).toFixed(2)}%\nBlinks: ${data.blinks}`, 
+                        true
+                    );
+                    
+                    // Send result back to parent window
+                    window.opener.postMessage({
+                        verified: true,
+                        confidence: data.confidence,
+                        userId: data.userId,
+                        liveness_confirmed: data.liveness_confirmed,
+                        blinks: data.blinks
+                    }, '*');  // Changed to allow any origin for development
+
+                    // Stop recognition after successful verification
+                    if (data.confidence > 0.55) {
+                        stopRecognition();
+                    }
+                } else {
+                    showStatus('recognitionStatus', data.message || 'Face not recognized', false);
+                }
+            } catch (err) {
+                showStatus('recognitionStatus', `Error: ${err.message}`, false);
+            }
+        }
+
+        function showStatus(elementId, message, success) {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.className = `status ${success ? 'success' : 'error'}`;
+        }
+
+        // Initialize
+        if (!userId) {
+            showStatus('recognitionStatus', 'No User ID provided!', false);
+            document.querySelectorAll('button').forEach(btn => btn.disabled = true);
+        }
+    </script>
+</body>
+</html>

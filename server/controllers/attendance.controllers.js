@@ -56,7 +56,7 @@ export const markAttendance = async (req, res) => {
       });
     }
 
-    // Mark attendance for today
+
     const today = new Date().toISOString().split("T")[0]; // Get YYYY-MM-DD format
     let attendanceEntry = classData.attendance.find(
       (entry) => entry.date.toISOString().split("T")[0] === today
@@ -92,3 +92,20 @@ export const markAttendance = async (req, res) => {
 };
 
 
+const faceRecognitionResponse = await fetch("https://api.example.com/face-recognition", {
+  method: "POST",
+  headers: {
+  "Content-Type": "application/json",
+  },
+  body: JSON.stringify({ userId, detectedfrequency }),
+});
+
+if (!faceRecognitionResponse.ok) {
+  return res.status(400).json({ message: "Face recognition failed. Attendance not marked." });
+}
+
+const faceRecognitionResult = await faceRecognitionResponse.json();
+
+if (!faceRecognitionResult.success) {
+  return res.status(400).json({ message: "Face recognition did not match. Attendance not marked." });
+}
