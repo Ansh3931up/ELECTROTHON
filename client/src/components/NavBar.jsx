@@ -198,7 +198,7 @@ const NavBar = () => {
 
   return (
     <>
-      {/* Mobile-optimized navbar with gradient */}
+      {/* Top Navbar - Respects isDarkMode */}
       <nav className={`shadow-lg text-white fixed top-0 left-0 right-0 z-50 rounded-b-sm ${ isDarkMode ? 'bg-gradient-to-r from-gray-800 to-gray-900' : 'bg-gradient-to-r from-[#003065] to-[#002040]' }`}>
         <div className="max-w-screen-sm mx-auto px-4 py-2.5 flex justify-between items-center">
           {/* Logo and page title */}
@@ -225,11 +225,7 @@ const NavBar = () => {
 
           {/* Right side controls */}
           <div className="flex items-center gap-3">
-            {/* ====== Theme Toggle Button Added Here ====== */}
-            <ThemeToggleButton />
-            {/* ============================================ */}
-
-            {/* Hamburger menu button - only shows when user is logged in */}
+            {/* Hamburger menu button */}
             {user ? (
               <button 
                 className="hamburger-btn relative p-2 rounded-full hover:bg-white/10 transition-colors flex items-center justify-center"
@@ -253,46 +249,46 @@ const NavBar = () => {
         </div>
       </nav>
 
-      {/* Enhanced mobile sidebar with full width */}
+      {/* Enhanced mobile sidebar */}
       {user && (
-        <div 
-          className={`sidebar fixed top-0 right-0 h-full w-full sm:w-80 bg-[#002550] shadow-xl z-50 transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : 'translate-x-full'}`}
+        <div
+          className={`sidebar fixed top-0 right-0 h-full w-full sm:w-80 shadow-xl z-50 transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : 'translate-x-full'} ${isDarkMode ? 'bg-gray-900' : 'bg-[#002550]'}`}
         >
-          {/* Sidebar header with matching size to navbar */}
-          <div className="bg-gradient-to-r from-[#002040] to-[#003065] px-4 py-2.5 flex justify-between items-center">
+          {/* Sidebar header - Use conditional gradient */}
+          <div className={`px-4 py-2.5 flex justify-between items-center ${isDarkMode ? 'bg-gradient-to-r from-gray-800 to-gray-900' : 'bg-gradient-to-r from-[#002040] to-[#003065]'}`}>
             <div className="flex items-center">
               <div className="w-8 h-8 flex items-center justify-center overflow-hidden">
                 <img src={logo} alt="Logo" className="w-full h-full object-contain" />
               </div>
               <h1 className="text-lg font-medium ml-2.5 tracking-wide">
-                <span className="font-semibold text-white">Attendance App</span>
+                <span className="font-semibold text-white">Neura<span className='text-sky-400'>Campus</span></span>
               </h1>
             </div>
-            <button 
+            <button
               onClick={() => setSidebarOpen(false)}
-              className="p-2 rounded-full hover:bg-white/10 transition-colors"
+              className="p-2 rounded-full text-white hover:bg-white/10 transition-colors"
               aria-label="Close menu"
             >
               {closeIcon}
             </button>
           </div>
           
-          {/* User profile section */}
+          {/* User profile section - Use conditional styling */}
           <div className="px-4 py-5">
-            <div className="flex items-center bg-[#0a3677] rounded-lg px-4 py-3.5">
-              <div className="w-10 h-10 bg-[#1e4c8a] rounded-full flex items-center justify-center text-white font-bold text-sm">
-                {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
+            <div className={`flex items-center rounded-lg px-4 py-3.5 ${isDarkMode ? 'bg-gray-700/50' : 'bg-[#0a3677]'}`}>
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm ${isDarkMode ? 'bg-gray-600' : 'bg-[#1e4c8a]'}`}>
+                {user.user?.name ? user.user.name.charAt(0).toUpperCase() : 'U'}
               </div>
               <div className="ml-3">
-                <p className="text-white font-medium">User</p>
-                <p className="text-white/60 text-xs">{user.email || 'user@example.com'}</p>
+                <p className="text-white font-medium">{user.user?.name || 'User'}</p>
+                <p className={`${isDarkMode ? 'text-gray-400' : 'text-white/60'} text-xs`}>{user.user?.email || 'user@example.com'}</p>
               </div>
             </div>
           </div>
 
-          {/* Main Navigation Section */}
+          {/* Main Navigation Section - Use conditional styling */}
           <div className="py-2">
-            <div className="text-gray-400 text-xs font-medium uppercase tracking-wider px-5 py-2">
+            <div className={`${isDarkMode ? 'text-gray-500' : 'text-gray-400'} text-xs font-medium uppercase tracking-wider px-5 py-2`}>
               MAIN
             </div>
             <ul className="space-y-1 px-3">
@@ -300,11 +296,11 @@ const NavBar = () => {
                 <li key={index}>
                   <Link 
                     to={item.path} 
-                    className="flex items-center px-4 py-2.5 rounded-lg text-white hover:bg-blue-700/30 active:bg-blue-700/40 transition-colors"
+                    className={`flex items-center px-4 py-2.5 rounded-lg transition-colors ${isDarkMode ? 'text-gray-300 hover:bg-gray-700 active:bg-gray-600' : 'text-white hover:bg-blue-700/30 active:bg-blue-700/40'}`}
                     onClick={() => setSidebarOpen(false)}
                   >
-                    <div className="w-8 h-8 flex items-center justify-center bg-blue-600/30 rounded-md mr-3">
-                      <span className="text-white">{item.icon}</span>
+                    <div className={`w-8 h-8 flex items-center justify-center rounded-md mr-3 ${isDarkMode ? 'bg-gray-700' : 'bg-blue-600/30'}`}>
+                      <span className={`${isDarkMode ? 'text-gray-400' : 'text-white'}`}>{item.icon}</span>
                     </div>
                     <span className="font-medium">{item.label}</span>
                   </Link>
@@ -313,9 +309,9 @@ const NavBar = () => {
             </ul>
           </div>
 
-          {/* Account & Settings Section */}
+          {/* Account & Settings Section - Use conditional styling */}
           <div className="py-2">
-            <div className="text-gray-400 text-xs font-medium uppercase tracking-wider px-5 py-2">
+            <div className={`${isDarkMode ? 'text-gray-500' : 'text-gray-400'} text-xs font-medium uppercase tracking-wider px-5 py-2`}>
               ACCOUNT & SETTINGS
             </div>
             <ul className="space-y-1 px-3">
@@ -323,11 +319,11 @@ const NavBar = () => {
                 <li key={index}>
                   <Link 
                     to={item.path} 
-                    className="flex items-center px-4 py-2.5 rounded-lg text-white hover:bg-blue-700/30 active:bg-blue-700/40 transition-colors"
+                    className={`flex items-center px-4 py-2.5 rounded-lg transition-colors ${isDarkMode ? 'text-gray-300 hover:bg-gray-700 active:bg-gray-600' : 'text-white hover:bg-blue-700/30 active:bg-blue-700/40'}`}
                     onClick={() => setSidebarOpen(false)}
                   >
-                    <div className="w-8 h-8 flex items-center justify-center bg-blue-600/30 rounded-md mr-3">
-                      <span className="text-white">{item.icon}</span>
+                    <div className={`w-8 h-8 flex items-center justify-center rounded-md mr-3 ${isDarkMode ? 'bg-gray-700' : 'bg-blue-600/30'}`}>
+                      <span className={`${isDarkMode ? 'text-gray-400' : 'text-white'}`}>{item.icon}</span>
                     </div>
                     <span className="font-medium">{item.label}</span>
                     {item.badge && (
@@ -338,12 +334,16 @@ const NavBar = () => {
                   </Link>
                 </li>
               ))}
+              <li className="px-4 py-2.5 flex items-center justify-between">
+                <span className={`font-medium ${isDarkMode ? 'text-gray-300' : 'text-white'}`}>Dark Mode</span>
+                <ThemeToggleButton />
+              </li>
             </ul>
           </div>
 
-          {/* Support & Help Section */}
+          {/* Support & Help Section - Use conditional styling */}
           <div className="py-2">
-            <div className="text-gray-400 text-xs font-medium uppercase tracking-wider px-5 py-2">
+            <div className={`${isDarkMode ? 'text-gray-500' : 'text-gray-400'} text-xs font-medium uppercase tracking-wider px-5 py-2`}>
               SUPPORT & HELP
             </div>
             <ul className="space-y-1 px-3">
@@ -351,11 +351,11 @@ const NavBar = () => {
                 <li key={index}>
                   <Link 
                     to={item.path} 
-                    className="flex items-center px-4 py-2.5 rounded-lg text-white hover:bg-blue-700/30 active:bg-blue-700/40 transition-colors"
+                    className={`flex items-center px-4 py-2.5 rounded-lg transition-colors ${isDarkMode ? 'text-gray-300 hover:bg-gray-700 active:bg-gray-600' : 'text-white hover:bg-blue-700/30 active:bg-blue-700/40'}`}
                     onClick={() => setSidebarOpen(false)}
                   >
-                    <div className="w-8 h-8 flex items-center justify-center bg-blue-600/30 rounded-md mr-3">
-                      <span className="text-white">{item.icon}</span>
+                    <div className={`w-8 h-8 flex items-center justify-center rounded-md mr-3 ${isDarkMode ? 'bg-gray-700' : 'bg-blue-600/30'}`}>
+                      <span className={`${isDarkMode ? 'text-gray-400' : 'text-white'}`}>{item.icon}</span>
                     </div>
                     <span className="font-medium">{item.label}</span>
                   </Link>
@@ -387,11 +387,9 @@ const NavBar = () => {
       {/* Add spacing to prevent content from hiding under the navbar */}
       <div className="pt-[3.25rem]"></div>
 
-      {/* Add the BottomNavBar component with user role */}
+      {/* BottomNavBar - Pass user object correctly */}
       <BottomNavBar 
-        user={user} 
-        isDarkMode={isDarkMode} 
-        setSidebarOpen={setSidebarOpen} 
+        user={user?.user}
       />
 
       {/* Add padding to the bottom to account for the bottom navigation */}
