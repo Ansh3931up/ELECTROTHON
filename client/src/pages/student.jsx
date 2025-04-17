@@ -2,7 +2,7 @@ import { motion } from 'framer-motion';
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 
-import NavBar from "../components/NavBar";
+
 import OfflineToggle from "../components/OfflineToggle";
 import detectSound from "../helpers/detectSound";
 import { getfrequencyByClassId,getStudentClasses } from "../redux/slices/classSlice";
@@ -207,7 +207,7 @@ const Student = () => {
 
   return (
     <div>
-      <NavBar />
+
       <div className="p-6">
         {(!deviceCapabilities.hasMicrophone || !deviceCapabilities.hasCamera) && (
           <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4">

@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 
-import NavBar from "../components/NavBar";
 import OfflineToggle from "../components/OfflineToggle";
 import { fetchAllStudents } from "../redux/slices/authSlice";
 import { createClass, generatefrequency, getTeacherClasses } from "../redux/slices/classSlice";
@@ -269,7 +268,7 @@ const Teacher = () => {
 
   return (
     <div>
-      <NavBar />
+      
       <div className="p-6">
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-2xl font-bold">Teacher Dashboard</h1>
