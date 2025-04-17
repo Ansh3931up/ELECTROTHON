@@ -244,7 +244,7 @@ const EditClass = () => {
     const scheduleToDisplay = currentClass ? convertScheduleToArray(formData.schedule) : [];
 
     return (
-        <div className={`min-h-screen pb-24 ${isDarkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>
+        <div className={`min-h-screen pb-24 bg-transparent`}>
             <div className="p-4 sm:p-6 max-w-2xl mx-auto">
                 {/* Header */}
                 <div className="flex items-center mb-6 sm:mb-8">

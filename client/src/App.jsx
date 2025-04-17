@@ -3,6 +3,9 @@ import "./App.css";
 import PropTypes from 'prop-types';
 import { Navigate, Route, Routes } from "react-router-dom";
 
+// Import the animation component
+import BackgroundAnimation from "./components/BackgroundAnimation";
+import { useTheme } from "./context/ThemeContext";
 import ClassDetails from './pages/ClassDetails';
 import EditClass from './pages/EditClass';
 import Home from "./pages/Home.jsx";
@@ -13,6 +16,8 @@ import Teacher from "./pages/teacher.jsx";
 import TeacherTimetable from './pages/TeacherTimetable';
 
 function App() {
+  // const { isDarkMode } = useTheme(); // Keep if needed for other things
+
   // const { user, isAuthenticated } = useSelector((state) => state.auth);
   // const role = user?.user?.role || user?.role;
 
@@ -58,34 +63,69 @@ function App() {
   // };
 
   return (
-    <>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/signup" element={<Signup />} />
-        <Route path="/login" element={<Login />} />
-        <Route
-          path="/teacher/attendance"
-          element={
-            <ProtectedRoute>
-              <Teacher />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/student"
-          element={
-            <ProtectedRoute>
-              <Student />
-            </ProtectedRoute>
-          }
-        />
-        <Route path="/teacher" element={<Teacher />} />
-        <Route path="/class/:classId" element={<ClassDetails />} />
-        <Route path="/class/:classId/edit" element={<EditClass />} />
-        <Route path="/timetable" element={<TeacherTimetable />} />
-        {/* <Route path="/redirect" element={<RoleBasedRedirect />} /> */}
-      </Routes>
-    </>
+    // Main container - no background styles needed here for the animation
+    <div className="min-h-screen w-full relative">
+      {/* Render the animation component - it will position itself with 'fixed' */}
+      <BackgroundAnimation />
+
+      {/* Routes are rendered normally. Their individual backgrounds will show, with bubbles floating over them */}
+      <div className="relative z-0"> {/* Content stays at z-0 */}
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/signup" element={<Signup />} />
+          <Route path="/login" element={<Login />} />
+          <Route
+            path="/teacher/attendance"
+            element={
+              <ProtectedRoute>
+                <Teacher />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/student"
+            element={
+              <ProtectedRoute>
+                <Student />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/teacher"
+            element={
+              <ProtectedRoute>
+                <Teacher />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/class/:classId"
+            element={
+              <ProtectedRoute>
+                <ClassDetails />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/class/:classId/edit"
+            element={
+              <ProtectedRoute>
+                <EditClass />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/timetable"
+            element={
+              <ProtectedRoute>
+                <TeacherTimetable />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="*" element={<Navigate to={getUserRole() ? (getUserRole() === 'teacher' ? '/teacher' : '/student') : '/login'} />} />
+        </Routes>
+      </div>
+    </div>
   );
 }
 

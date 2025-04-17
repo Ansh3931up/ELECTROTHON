@@ -1,1 +1,52 @@
 @import "tailwindcss";
+
+
+@layer base {
+  html, body, #root {
+    height: 100%;
+  }
+}
+
+@keyframes float {
+  0% {
+    transform: translateY(0) translateX(0);
+    opacity: 0.5;
+  }
+  50% {
+     transform: translateY(-50vh) translateX(15px);
+     opacity: 0.7;
+  }
+  100% {
+    transform: translateY(-100vh) translateX(-10px);
+    opacity: 0;
+  }
+}
+
+.animate-float {
+  animation-name: float;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(156, 163, 175, 0.4);
+  border-radius: 10px;
+  border: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(107, 114, 128, 0.5);
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: rgba(75, 85, 99, 0.5);
+}
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(55, 65, 81, 0.6);
+}

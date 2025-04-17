@@ -138,7 +138,7 @@ const Teacher = () => {
   const filterOptions = ['active', 'inactive', 'ended', 'all'];
 
   return (
-    <div className={`pb-20 pt-4 min-h-screen ${isDarkMode ? 'bg-gray-900' : 'bg-slate-100'} transition-colors duration-300`}>
+    <div className={`pb-20 pt-4 min-h-screen bg-transparent transition-colors duration-300`}>
       <div className="p-4 max-w-4xl mx-auto">
         {/* <div className="flex justify-end items-center mb-6 bg-white/80 backdrop-blur-sm p-4 rounded-xl shadow-sm">
           <OfflineToggle onModeChange={handleOfflineModeChange} />

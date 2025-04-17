@@ -199,7 +199,7 @@ const BottomNavBar = ({ user }) => {
 
   return (
     <>
-      <div className={`fixed bg-gradient-to-r shadow-lg z-40 border-t -bottom-2 left-0 right-0 ${
+      <div className={`fixed rounded-t-3xl bg-gradient-to-r shadow-lg z-40 border-t -bottom-2 left-0 right-0 ${
           isDarkMode
           ? 'from-gray-800 to-gray-900 border-gray-700'
           : 'from-[#003065] to-[#002040] border-blue-800' // Original light colors
