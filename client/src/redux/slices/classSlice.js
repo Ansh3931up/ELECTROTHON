@@ -35,10 +35,32 @@ export const createClass = createAsyncThunk(
   "class/createClass",
   async (classData, { rejectWithValue }) => {
     try {
-      const response = await axios.post(`${API_URL}/create-class`, classData);
-      return response.data.data;
+      // Retrieve the token from localStorage
+      const token = localStorage.getItem("token");
+      if (!token) {
+        // Handle case where token might be missing unexpectedly
+        return rejectWithValue("Authentication token not found. Please log in again.");
+      }
+
+      // Add the Authorization header to the request config
+      const config = {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json', // Ensure content type is set
+        },
+      };
+
+      // Send classData and the config object with headers
+      const response = await axios.post(`${API_URL}/create-class`, classData, config);
+
+      console.log("Class created successfully:", response.data);
+      // Assuming backend returns { success: true, data: newClass }
+      return response.data.data; // Return the newly created class data
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || "Failed to create class");
+      console.error("Error creating class:", error.response?.data || error.message); // Log more detailed error
+      // Extract message from backend response if available
+      const message = error.response?.data?.message || error.message || "Failed to create class";
+      return rejectWithValue(message);
     }
   }
 );
@@ -159,16 +181,16 @@ export const markStudentPresentByFrequency = createAsyncThunk(
   }
 );
 
-// <<< NEW THUNK for editing class >>>
+// <<< UPDATED THUNK for editing class >>>
 export const editClassDetails = createAsyncThunk(
   "class/editDetails",
-  // Expects { classId, updates: { className?, classType?, time?, status? }, teacherId (for verification) }
-  async ({ classId, updates, teacherId }, { rejectWithValue }) => {
+  // Expects { classId, updates: { className?, schedule?, batch? } }
+  async ({ classId, updates }, { rejectWithValue }) => { // Removed teacherId from params
     try {
       const token = localStorage.getItem("token");
-      // Include teacherId in the body for backend verification
-      const payload = { ...updates, teacherId };
-
+      // Payload is now just the updates object
+      const payload = { ...updates }; // Removed teacherId from payload
+      console.log("Payload:", payload);
       const response = await axios.patch(`${API_URL}/${classId}`, payload, {
         headers: {
           Authorization: `Bearer ${token}`,

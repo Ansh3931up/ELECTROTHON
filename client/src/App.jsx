@@ -1,6 +1,7 @@
 import "./App.css";
-import { Navigate, Route, Routes } from "react-router-dom";
+
 import PropTypes from 'prop-types';
+import { Navigate, Route, Routes } from "react-router-dom";
 
 import ClassDetails from './pages/ClassDetails';
 import EditClass from './pages/EditClass';

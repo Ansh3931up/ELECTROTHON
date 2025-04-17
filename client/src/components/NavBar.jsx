@@ -6,6 +6,8 @@ import { Link, useLocation,useNavigate } from 'react-router-dom';
 import logo from '../assets/logo1112.png';
 import { logoutUser } from '../redux/slices/authSlice';
 import BottomNavBar from './BottomNavBar';
+import { useTheme } from '../context/ThemeContext';
+import ThemeToggleButton from './ThemeToggleButton';
 
 const NavBar = () => {
   const dispatch = useDispatch();
@@ -15,7 +17,7 @@ const NavBar = () => {
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [isLogoAnimating, setIsLogoAnimating] = useState(false);
   const [currentPage, setCurrentPage] = useState('');
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const { isDarkMode } = useTheme();
 
   // Determine current page name based on URL path
   useEffect(() => {
@@ -197,7 +199,7 @@ const NavBar = () => {
   return (
     <>
       {/* Mobile-optimized navbar with gradient */}
-      <nav className="bg-gradient-to-r from-[#003065]  to-[#002040] rounded-b-sm shadow-lg text-white fixed top-0 left-0 right-0 z-50">
+      <nav className={`shadow-lg text-white fixed top-0 left-0 right-0 z-50 rounded-b-sm ${ isDarkMode ? 'bg-gradient-to-r from-gray-800 to-gray-900' : 'bg-gradient-to-r from-[#003065] to-[#002040]' }`}>
         <div className="max-w-screen-sm mx-auto px-4 py-2.5 flex justify-between items-center">
           {/* Logo and page title */}
           <div className="flex items-center">
@@ -222,9 +224,13 @@ const NavBar = () => {
           </div>
 
           {/* Right side controls */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            {/* ====== Theme Toggle Button Added Here ====== */}
+            <ThemeToggleButton />
+            {/* ============================================ */}
+
             {/* Hamburger menu button - only shows when user is logged in */}
-        {user ? (
+            {user ? (
               <button 
                 className="hamburger-btn relative p-2 rounded-full hover:bg-white/10 transition-colors flex items-center justify-center"
                 onClick={() => setSidebarOpen(!isSidebarOpen)}
@@ -233,16 +239,16 @@ const NavBar = () => {
                 <div className="w-5 h-5 relative">
                  <FiAlignRight size={22} />
                  </div>
-          </button>
-        ) : (
+              </button>
+            ) : (
               <button 
                 onClick={() => navigate('/login')} 
                 className="bg-gradient-to-r from-green-600 to-green-500 px-4 py-1.5 rounded-full text-sm font-medium shadow-md hover:shadow-lg hover:from-green-500 hover:to-green-600 active:scale-95 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-opacity-50 border border-green-400/10"
                 aria-label="Login"
               >
-            Login
-          </button>
-        )}
+                Login
+              </button>
+            )}
           </div>
         </div>
       </nav>
@@ -365,8 +371,8 @@ const NavBar = () => {
               className="w-full py-3 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors flex items-center justify-center font-medium"
             >
               {signOutIcon} Sign Out
-        </button>
-      </div>
+            </button>
+          </div>
         </div>
       )}
 

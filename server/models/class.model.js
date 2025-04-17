@@ -1,5 +1,19 @@
 import mongoose from 'mongoose';
 
+// --- NEW: Sub-schema for individual schedule entries ---
+const scheduleEntrySchema = new mongoose.Schema({
+    day: {
+        type: String,
+        required: true,
+        enum: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], // Enforce valid days
+    },
+    timing: [{ // Array of time strings (e.g., "4:00 PM", "16:00")
+        type: String,
+        required: true,
+        trim: true,
+    }]
+}, { _id: false }); // No separate _id for schedule entries
+
 // Sub-schema for a single student's record within a session
 const studentAttendanceStatusSchema = new mongoose.Schema({
     studentId: {
@@ -42,55 +56,62 @@ const classSchema = new mongoose.Schema({
         maxLength: [50, "Class name must be less than 50 characters"],
         trim: true,
     },
-    // <<< NEW: Add classType field >>>
-    classType: {
-        type: String,
-        required: [true, "Class type is required"],
-        enum: {
-            values: ['lecture', 'lab'],
-            message: 'Class type must be either "lecture" or "lab"'
-        },
-        default: 'lecture' // Optional: Default to lecture
-    },
     teacherId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",
-        required: true,
+        required: [true, "Teacher ID is required"],
     },
     studentList: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",
     }],
-    // Stores generated frequency temporarily
     frequency: [{
         type: Number,
     }],
-    // Stores the scheduled time for the class
-    time: {
-        type: Date,
-    },
-    // <<< UPDATED: Use the new dailyAttendanceSchema >>>
-    attendanceRecords: [dailyAttendanceSchema], // Array of daily attendance objects
+    attendanceRecords: [dailyAttendanceSchema],
 
-    // <<< NEW: Add status field >>>
+    // --- UPDATED: Schedule field ---
+    schedule: {
+        type: [scheduleEntrySchema], // Use the sub-schema
+        required: [true, "Schedule information is required"],
+        validate: [v => Array.isArray(v) && v.length > 0, 'Schedule must contain at least one entry'] // Ensure schedule is not empty
+    },
+    // --- REMOVED: Old schedule field (if it existed) ---
+    // schedule: { type: String, ... },
+
+    classCode: {
+        type: String,
+        required: [true, "Class code is required"],
+        unique: true,
+        trim: true,
+        uppercase: true,
+    },
+    createdBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: [true, "Creator user ID is required"],
+    },
+    batch: {
+        type: String,
+        required: [true, "Batch information is required"],
+        trim: true,
+        match: [/^\d{4}$/, 'Batch must be a valid 4-digit year'] // Added backend regex validation
+    },
+    // --- NEW: Status field ---
     status: {
         type: String,
         required: true,
-        enum: {
-            values: ['active', 'inactive', 'archived'], // Added 'archived' as another potential state
-            message: 'Status must be either "active", "inactive", or "archived"'
-        },
-        default: 'active' // Default new classes to active
+        enum: ['active', 'inactive', 'archived'],
+        default: 'active'
     }
-}, { timestamps: true }); // timestamps adds createdAt and updatedAt for the Class itself
+}, { timestamps: true });
 
-// Optional: Index on the embedded date for faster lookups if needed often
+classSchema.index({ classCode: 1 });
+classSchema.index({ teacherId: 1 });
 classSchema.index({ "attendanceRecords.date": 1 });
-classSchema.index({ "attendanceRecords.studentId": 1 });
-
-// Optional: Index status for filtering active/inactive classes
 classSchema.index({ status: 1 });
-classSchema.index({ teacherId: 1, status: 1 }); // Useful for fetching active classes for a teacher
+// Optional: Index schedule day if needed for querying
+// classSchema.index({ "schedule.day": 1 });
 
 const Class = mongoose.model("Class", classSchema);
 

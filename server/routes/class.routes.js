@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { verifyJWT } from "../middlewares/auth.middleware.js";
 import { 
   generateAttendance, 
   registerClass, 
@@ -13,7 +14,7 @@ import {
 import upload from "../middlewares/multer.middleware.js";
 
 const router = Router();
-router.post("/create-class", registerClass);
+router.post("/create-class",verifyJWT, registerClass);
 router.post("/generate-attendance", generateAttendance);
 
 // Route to get frequency for a specific class
@@ -32,6 +33,6 @@ router.post('/attendance/mark-by-frequency', markStudentPresentByFrequency);
 router.get('/:classId', getClassDetails);
 
 // --- Class Routes ---
-router.patch('/:classId', editClassDetails);
+router.patch('/:classId', verifyJWT, editClassDetails);
 
 export default router;

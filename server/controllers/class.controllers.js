@@ -4,24 +4,34 @@ import User from "../models/user.model.js";
 import mongoose from 'mongoose'; // Import mongoose for ObjectId validation
 
 // Create a class by a teacher
-export const registerClass = async (req, res, next) => {
+export const registerClass = async (req, res, next) => 
+  {
+    console.log("Received class data:", req.body);
+    console.log("User:", req.user);
   try {
-    const { teacherId, className, classType, time, studentIds } = req.body;
+    // --- Updated fields from req.body ---
+    const { className, schedule, classCode, batch, studentIds } = req.body;
+    console.log("Received class data:", req.body);
+    const createdBy = req.user?.id; // Assuming auth middleware adds user to req
 
-    // Validate required fields
-    if (!teacherId || !className || !classType) {
-      return next(new AppError("Teacher ID, Class Name, and Class Type are required", 400));
+    // --- Updated Validations ---
+    if (!className || !schedule || !classCode || !batch || !createdBy) {
+      return next(new AppError("ClassName, Schedule, ClassCode, Batch, and Creator ID are required", 400));
     }
 
-    // Verify if the teacher exists and has a valid role
-    const teacher = await User.findById(teacherId);
+    // Verify if the creator exists and is a teacher (assuming only teachers create classes)
+    // Note: The schema requires teacherId, so we need that too. 
+    // Let's assume createdBy IS the teacherId for simplicity here.
+    // If not, you'll need to pass teacherId separately or adjust logic.
+    const teacher = await User.findById(createdBy);
     if (!teacher || teacher.role !== "teacher") {
       return next(
-        new AppError("Invalid Teacher ID or user is not a teacher", 400)
+        new AppError("Invalid Creator ID or user is not a teacher", 400)
       );
     }
+    const teacherId = createdBy; // Assign teacherId based on creator
 
-    // Validate student IDs if provided
+    // Validate student IDs if provided (remains the same)
     if (studentIds && studentIds.length > 0) {
       const students = await User.find({ 
         _id: { $in: studentIds },
@@ -33,18 +43,21 @@ export const registerClass = async (req, res, next) => {
       }
     }
 
-    // Create a new class including classType
+    // --- Updated Class.create call ---
     const newClass = await Class.create({
-      teacherId,
       className,
-      classType,
+      schedule,
+      classCode, // Added
+      batch,     // Added
+      teacherId, // Using creator as teacher for now
+      createdBy, // Added
       studentList: studentIds || [],
-      frequency: [],
-      time: time || new Date(),
-      attendanceRecords: [] // Initialize as empty array
+      frequency: [], // Initialize as empty
+      attendanceRecords: [] // Initialize as empty
+      // Removed: classType, time, status implicitly
     });
 
-    // Update classId for all students
+    // Update classId for all students (remains the same)
     if (studentIds && studentIds.length > 0) {
       await User.updateMany(
         { _id: { $in: studentIds } },
@@ -58,11 +71,15 @@ export const registerClass = async (req, res, next) => {
       data: newClass,
     });
   } catch (error) {
-    // Mongoose validation errors (like invalid enum) will be caught here
+    // Handle potential duplicate key error for classCode
+    if (error.code === 11000 && error.keyPattern?.classCode) {
+        return next(new AppError(`Class code '${error.keyValue.classCode}' already exists.`, 409)); // 409 Conflict
+    }
     if (error.name === 'ValidationError') {
         return next(new AppError(error.message, 400));
     }
-    next(new AppError(error.message, 500));
+    console.error("Error registering class:", error); // Log the actual error
+    next(new AppError("Failed to register class", 500));
   }
 };
 
@@ -163,9 +180,10 @@ export const getTeacherClasses = async (req, res, next) => {
     }
     
     // Find all classes where this teacher is assigned
+    // --- Updated .select() --- 
     const classes = await Class.find({ teacherId })
       .populate('studentList', 'fullName email')
-      .select('className time studentList');
+      .select('className schedule classCode batch studentList status'); // Replaced time with schedule, added classCode, batch
     
     res.status(200).json({
       success: true,
@@ -189,9 +207,10 @@ export const getStudentClasses = async (req, res, next) => {
     }
     
     // Find the class this student is part of
+    // --- Updated .select() --- 
     const classes = await Class.find({ studentList: studentId })
       .populate('teacherId', 'fullName email')
-      .select('className time');
+      .select('className schedule classCode batch teacherId'); // Replaced time with schedule, added classCode, batch, teacherId
     
     res.status(200).json({
       success: true,
@@ -463,77 +482,66 @@ export const markStudentPresentByFrequency = async (req, res, next) => {
     }
 };
 
-// <<< NEW FUNCTION to edit class details >>>
+// <<< UPDATED FUNCTION to edit class details >>>
 export const editClassDetails = async (req, res, next) => {
     try {
+        console.log("Editing class details - Req Params:", req.params); // Added for testing
+        console.log("Editing class details - Req Body:", req.body); // Added for testing
         const { classId } = req.params;
-        // Assuming teacher's ID comes from authentication middleware (e.g., req.user.id)
-        // If not using middleware, you'd need to pass teacherId in the request and verify it.
-        // const requestingTeacherId = req.user?.id; // Adjust based on your auth setup
-        const { className, classType, time, status, teacherId } = req.body; // Get teacherId from body for verification if not using auth middleware
+        // --- Updated fields allowed for update ---
+        const { className, schedule, batch,status } = req.body;
+        const userId = req.user?.id; // ID of user making the request
 
-        // --- Basic Validations ---
         if (!mongoose.Types.ObjectId.isValid(classId)) {
             return next(new AppError("Invalid Class ID format", 400));
         }
-         // <<< Verification: Ensure teacher ID is provided if not using auth middleware >>>
-         if (!teacherId || !mongoose.Types.ObjectId.isValid(teacherId)) {
-             return next(new AppError("Valid Teacher ID must be provided for verification", 400));
-         }
+        if (!userId) {
+            return next(new AppError("Authentication required", 401));
+        }
 
-        // Find the class to edit
+        // Find the class
         const classDoc = await Class.findById(classId);
         if (!classDoc) {
             return next(new AppError("Class not found", 404));
         }
 
-        // --- Authorization Check ---
-        // Ensure the requesting user is the teacher of this class
-        if (classDoc.teacherId.toString() !== teacherId) { // Compare with teacherId from request body
-            return next(new AppError("You are not authorized to edit this class", 403)); // 403 Forbidden
+        // --- Authorization: Check if the authenticated user is the teacher of this class ---
+        if (classDoc.teacherId.toString() !== userId) {
+            return next(new AppError("You are not authorized to edit this class", 403));
         }
 
-        // --- Update Allowed Fields ---
-        // Only update fields that are provided in the request body
-        if (className !== undefined) {
-            if (typeof className !== 'string' || className.trim().length < 3 || className.trim().length > 50) {
-                 return next(new AppError("Class name must be between 3 and 50 characters", 400));
-            }
-            classDoc.className = className.trim();
-        }
-        if (classType !== undefined) {
-            if (!['lecture', 'lab'].includes(classType)) {
-                return next(new AppError("Invalid class type. Must be 'lecture' or 'lab'", 400));
-            }
-            classDoc.classType = classType;
-        }
-        if (time !== undefined) {
-             const newTime = new Date(time);
-             if (isNaN(newTime.getTime())) {
-                 return next(new AppError("Invalid time format provided", 400));
-             }
-             classDoc.time = newTime;
-        }
-        if (status !== undefined) {
-             if (!['active', 'inactive', 'archived'].includes(status)) {
-                 return next(new AppError("Invalid status. Must be 'active', 'inactive', or 'archived'", 400));
-             }
-             classDoc.status = status;
-        }
-        // Note: studentList editing is excluded for now due to complexity
+        // Build the update object with only the fields provided
+        const updates = {};
+        if (className !== undefined) updates.className = className; // Allow empty string if intended
+        if (schedule !== undefined) updates.schedule = schedule;  
+        if (batch !== undefined) updates.batch = batch;
+        if (status !== undefined) updates.status = status;
+        // Removed: classType, time, status
+        // Excluded: classCode, teacherId, createdBy, studentList (manage students separately)
 
-        // Save the updated document
-        const updatedClass = await classDoc.save();
+        if (Object.keys(updates).length === 0) {
+            return next(new AppError("No valid fields provided for update", 400));
+        }
+
+        // Perform the update
+        const updatedClass = await Class.findByIdAndUpdate(classId, { $set: updates }, { new: true, runValidators: true });
+
+        if (!updatedClass) {
+             // Should not happen if findById found it, but good practice
+             return next(new AppError("Failed to update class", 500));
+        }
 
         res.status(200).json({
             success: true,
             message: "Class details updated successfully",
-            class: updatedClass // Return the full updated class
+            class: updatedClass,
         });
 
     } catch (error) {
-        if (error.name === 'CastError') { /* ... */ }
-        if (error.name === 'ValidationError') { /* ... */ }
-        return next(new AppError(error.message || "Internal server error updating class", 500));
+        if (error.name === 'ValidationError') {
+            return next(new AppError(error.message, 400));
+        }
+        console.error("Error editing class:", error); // Log error
+        next(new AppError(error.message || "Failed to update class details", 500));
     }
 };
