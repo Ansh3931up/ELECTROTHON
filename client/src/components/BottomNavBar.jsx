@@ -1,9 +1,9 @@
-import { Link, useLocation } from 'react-router-dom';
 import { 
-  FiHome, FiBook, FiPlusCircle, 
-  FiSearch, FiMenu, FiCalendar,
-  FiUser, FiFileText, FiBell
-} from 'react-icons/fi';
+FiBell,
+FiBook, FiCalendar,
+FiFileText,   FiHome, FiMenu, FiPlusCircle, 
+  FiSearch,   FiUser} from 'react-icons/fi';
+import { Link, useLocation } from 'react-router-dom';
 
 const BottomNavBar = ({ user, isDarkMode, setSidebarOpen, onCreateClass }) => {
   const location = useLocation();

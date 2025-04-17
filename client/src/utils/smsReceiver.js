@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core';
+
 import { decryptData } from './offlineMode';
 
 class SMSReceiver {

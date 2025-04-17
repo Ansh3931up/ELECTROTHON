@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
+import { FiSearch } from 'react-icons/fi';
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
-import { FiSearch } from 'react-icons/fi';
 
+import BottomNavBar from "../components/BottomNavBar";
 import OfflineToggle from "../components/OfflineToggle";
 import { fetchAllStudents } from "../redux/slices/authSlice";
 import { createClass, getTeacherClasses } from "../redux/slices/classSlice";
-import BottomNavBar from "../components/BottomNavBar";
 
 const Teacher = () => {
   const dispatch = useDispatch();

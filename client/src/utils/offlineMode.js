@@ -1,7 +1,7 @@
-import CryptoJS from 'crypto-js';
 import { Capacitor } from '@capacitor/core';
 import { Network } from '@capacitor/network';
 import axios from 'axios';
+import CryptoJS from 'crypto-js';
 
 const SECRET_KEY = import.meta.env.VITE_SECRET_KEY || 'your-default-secret-key';
 const API_URL = import.meta.env.VITE_API_URL || 'https://electrothon.onrender.com';

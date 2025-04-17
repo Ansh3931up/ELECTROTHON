@@ -1,7 +1,7 @@
+import axios from "axios";
 import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from 'react-router-dom';
-import axios from "axios";
 
 import { loginUser } from "../redux/slices/authSlice";
 

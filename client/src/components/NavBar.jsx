@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
+import { FiAlignRight } from 'react-icons/fi';
 import { useDispatch, useSelector } from 'react-redux';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useLocation,useNavigate } from 'react-router-dom';
+
 import logo from '../assets/logo1112.png';
 import { logoutUser } from '../redux/slices/authSlice';
 import BottomNavBar from './BottomNavBar';
-import { FiAlignRight } from 'react-icons/fi';
 
 const NavBar = () => {
   const dispatch = useDispatch();

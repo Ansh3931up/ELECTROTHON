@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
-import { getOfflineMode, setOfflineMode, checkNetworkStatus } from '../utils/offlineMode';
+import React, { useEffect, useState } from 'react';
+
+import { checkNetworkStatus,getOfflineMode, setOfflineMode } from '../utils/offlineMode';
 
 const OfflineToggle = ({ onModeChange }) => {
   const [isOffline, setIsOffline] = useState(getOfflineMode());

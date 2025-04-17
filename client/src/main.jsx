@@ -6,7 +6,6 @@ import { Provider } from "react-redux";
 import { BrowserRouter } from "react-router-dom";
 
 import App from "./App.jsx";
-
 import NavBar from "./components/NavBar.jsx";
 import store from "./redux/store.js";
 

@@ -5,7 +5,10 @@ import {
   getClassfrequency, 
   getTeacherClasses, 
   getStudentClasses,
-  getClassDetails
+  getClassDetails,
+  saveDailyAttendance,
+  markStudentPresentByFrequency,
+  editClassDetails
 } from "../controllers/class.controllers.js";
 import upload from "../middlewares/multer.middleware.js";
 
@@ -20,7 +23,15 @@ router.get('/frequency/:classId', getClassfrequency);
 router.get('/teacher/:teacherId', getTeacherClasses);
 router.get('/student/:studentId', getStudentClasses);
 
-// NEW ROUTE for getting specific class details
+// --- Attendance Route ---
+// Note: Placed *before* the generic /:classId GET route to avoid conflict
+router.post('/:classId/attendance', saveDailyAttendance);
+router.post('/attendance/mark-by-frequency', markStudentPresentByFrequency);
+
+// Route for getting specific class details
 router.get('/:classId', getClassDetails);
+
+// --- Class Routes ---
+router.patch('/:classId', editClassDetails);
 
 export default router;

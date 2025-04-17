@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 // Icons for better visual cues
-import { FiChevronLeft, FiClock, FiPause, FiPlay, FiUsers, FiVolume2,FiX } from 'react-icons/fi';
+import { FiBookOpen, FiChevronLeft, FiClock, FiCpu, FiEdit,FiPause, FiPlay, FiUsers, FiVolume2,FiX } from 'react-icons/fi';
 import { useDispatch, useSelector } from "react-redux";
-import { useNavigate,useParams } from "react-router-dom";
+import { Link,useNavigate,useParams } from "react-router-dom";
 
-import { fetchClassDetails,generatefrequency } from "../redux/slices/classSlice"; // Assuming fetchClassDetails exists or needs to be created
+import { clearAttendanceError,fetchClassDetails,generatefrequency, saveDailyAttendance } from "../redux/slices/classSlice"; // Assuming fetchClassDetails exists or needs to be created
 import { sendFrequencySMS, storeOfflineFrequency } from "../utils/offlineMode";
 
 const generateRandomFrequency = () => {
@@ -27,11 +27,14 @@ const ClassDetails = () => {
 
   // Selectors - adjust based on your Redux state structure for a single class
   const user = useSelector((state) => state.auth.user.user);
-  const { currentClass, loading, error } = useSelector((state) => state.class); // Assuming state.class holds the single fetched class
+  const { currentClass, loading, error, attendanceSaving, attendanceError } = useSelector((state) => state.class); // Assuming state.class holds the single fetched class
   
   // State for attendance marking session
+  const [isSelectingType, setIsSelectingType] = useState(false); // NEW: State to show type selection prompt
+  const [currentSessionType, setCurrentSessionType] = useState(null); // NEW: Stores 'lecture' or 'lab' for the session
   const [isMarkingMode, setIsMarkingMode] = useState(false); // NEW: Controls visibility of attendance list
   const [currentDailyAttendance, setCurrentDailyAttendance] = useState({}); // NEW: Holds attendance for the session being marked
+  const [sortedStudentList, setSortedStudentList] = useState([]); // NEW: For sorted display
 
   // State moved from Teacher component
   const [classFrequencies, setClassFrequencies] = useState({});
@@ -44,35 +47,86 @@ const ClassDetails = () => {
   const [audioContext, setAudioContext] = useState(null);
   const [oscillator, setOscillator] = useState(null);
 
+  // Determine if the current user is the teacher of this class
+  const isClassTeacher = currentClass?.teacherId?._id === user?._id;
+
   useEffect(() => {
     if (classId) {
       // Dispatch action to fetch details for this specific class
       // You might need to create this action/reducer if it doesn't exist
       dispatch(fetchClassDetails(classId));
     }
-    // Reset marking mode when class changes
+    // Reset all relevant states when class changes
     setIsMarkingMode(false);
+    setIsSelectingType(false);
+    setCurrentSessionType(null);
     setCurrentDailyAttendance({});
+    // Clear save error when component mounts or class changes
+    dispatch(clearAttendanceError());
   }, [dispatch, classId]);
 
-  // NEW: Handler to start marking attendance for today
-  const handleStartAttendance = () => {
+  // Step 1: Only sets frontend state now
+  const handleInitiateAttendance = () => {
     if (currentClass?.studentList) {
       const initialAttendance = {};
       currentClass.studentList.forEach(student => {
-        initialAttendance[student._id] = "present"; // Default everyone to present
+        initialAttendance[student._id] = "absent"; // Default absent
       });
       setCurrentDailyAttendance(initialAttendance);
-      setIsMarkingMode(true); // Show the attendance list
+      setIsSelectingType(true); // Still ask for type first
+      setIsMarkingMode(false);
+      setCurrentSessionType(null);
     }
   };
 
-  // UPDATED: Handler updates the state for the current marking session
+  const handleSelectSessionType = (type) => {
+    if (currentClass?.studentList) {
+      // ... (initialize currentDailyAttendance as before - all absent) ...
+      const initialAttendance = {};
+      currentClass.studentList.forEach(student => {
+        initialAttendance[student._id] = "absent";
+      });
+      setCurrentDailyAttendance(initialAttendance);
+      setCurrentSessionType(type);
+      setIsSelectingType(false);
+      setIsMarkingMode(true);
+       // Initialize sorted list when marking starts
+       sortStudentList(currentClass.studentList, initialAttendance);
+    }
+  };
+
+  // UPDATED: Trigger sorting after changing status
   const handleAttendanceChange = (studentId, status) => {
-    setCurrentDailyAttendance(prev => ({
-      ...prev,
+    const updatedAttendance = {
+      ...currentDailyAttendance,
       [studentId]: status
-    }));
+    };
+    setCurrentDailyAttendance(updatedAttendance);
+    // Re-sort the list based on the new attendance state
+    sortStudentList(currentClass.studentList, updatedAttendance);
+  };
+  // Step 3: Cancel the entire process (from type selection or marking)
+  const handleCancelAttendanceProcess = () => {
+    setIsMarkingMode(false);
+    setIsSelectingType(false);
+    setCurrentSessionType(null);
+    setCurrentDailyAttendance({});
+    // Optionally clear frequency states if needed
+  };
+
+  // NEW: Client-side sorting function
+  const sortStudentList = (students, attendance) => {
+    if (!students) return;
+    const sorted = [...students].sort((a, b) => {
+      const statusA = attendance[a._id] || 'absent';
+      const statusB = attendance[b._id] || 'absent';
+      // 'absent' comes before 'present'
+      if (statusA === 'absent' && statusB === 'present') return -1;
+      if (statusA === 'present' && statusB === 'absent') return 1;
+      // Otherwise, keep original relative order (or sort by name)
+      return a.fullName.localeCompare(b.fullName);
+    });
+    setSortedStudentList(sorted);
   };
 
   const handleOfflineModeChange = (offline) => {
@@ -203,66 +257,85 @@ const ClassDetails = () => {
 
   // UPDATED: Save attendance for the current day's session
   const saveAttendance = async () => {
-     if (!currentClass?._id || Object.keys(currentDailyAttendance).length === 0) return;
-     const currentClassId = currentClass._id;
-     const today = new Date().toISOString(); // Save with today's date
+    if (!currentClass?._id || !currentSessionType || Object.keys(currentDailyAttendance).length === 0 || attendanceSaving) return;
+    const currentClassId = currentClass._id;
+    const todayISO = new Date().toISOString();
 
-    try {
-      const attendancePayload = Object.entries(currentDailyAttendance).map(([studentId, status]) => ({
-        studentId,
-        status,
+    const attendanceDataForThunk = {
         classId: currentClassId,
-        date: today // Use current date for this session
-      }));
+        date: todayISO,
+        sessionType: currentSessionType,
+        attendanceList: Object.entries(currentDailyAttendance).map(([studentId, status]) => ({
+            studentId,
+            status,
+        })),
+        recordedBy: user._id,
+    };
 
-      // Assuming API endpoint '/api/v1/attendance/batch' handles saving for a specific date
-      // Or adjust endpoint if needed e.g., '/api/v1/class/:classId/attendance'
-      const response = await fetch('/api/v1/attendance/batch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', /* Add Auth header */ },
-        body: JSON.stringify({
-          attendanceRecords: attendancePayload,
-          classId: currentClassId,
-          recordedBy: user._id // Assuming backend needs this
+    dispatch(saveDailyAttendance(attendanceDataForThunk))
+        .unwrap()
+        .then((result) => {
+            alert('Attendance saved successfully!');
+            handleCancelAttendanceProcess();
+            // Consider re-fetching class details here for consistency
+            // dispatch(fetchClassDetails(classId));
         })
-      });
+        .catch((err) => {
+            alert(`Failed to save attendance: ${err.message || 'Unknown error'}`);
+        });
+  };
 
-      if (!response.ok) throw new Error('Failed to save attendance');
-      alert('Attendance saved successfully!');
-      setIsMarkingMode(false); // Hide the list after saving
-      // Optionally navigate back or refresh data
-      // navigate('/teacher');
-    } catch (err) {
-      console.error('Error saving attendance:', err);
-      alert('Failed to save attendance: ' + err.message);
+  // Format date/time for better readability
+  const formattedTime = currentClass?.time ? new Date(currentClass.time).toLocaleString([], {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  }) : 'N/A';
+
+  // Helper to get icon and text for class type
+  const getClassTypeInfo = (type) => {
+    switch (type) {
+      case 'lecture':
+        return { icon: <FiBookOpen className="w-5 h-5 mr-2.5 text-gray-500"/>, text: 'Lecture' };
+      case 'lab':
+        return { icon: <FiCpu className="w-5 h-5 mr-2.5 text-gray-500"/>, text: 'Lab' };
+      default:
+        return { icon: <FiBookOpen className="w-5 h-5 mr-2.5 text-gray-500"/>, text: 'N/A' }; // Default or fallback
     }
   };
+
+  const classTypeInfo = getClassTypeInfo(currentClass?.classType);
 
   // --- Render Logic ---
   if (loading) return <div className="flex justify-center items-center h-screen"><p>Loading...</p></div>;
   if (error) return <div className="p-6 text-center text-red-600 bg-red-50 rounded-lg max-w-md mx-auto mt-10">Error: {error}</div>;
   if (!currentClass) return <div className="p-6 text-center text-gray-500">Class not found.</div>;
 
-  // Format date/time for better readability
-  const formattedTime = new Date(currentClass.time).toLocaleString([], {
-    dateStyle: 'short', // e.g., 12/25/2024
-    timeStyle: 'short', // e.g., 11:47 AM
-  });
-
   return (
     <div className="min-h-screen bg-gray-100 pb-24">
       <div className="p-4 sm:p-6 max-w-4xl mx-auto">
 
         {/* --- Header --- */}
-        <div className="flex items-center mb-6 sm:mb-8">
-          <button
-            onClick={() => navigate(-1)}
-            className="mr-3 text-gray-600 hover:text-gray-900 p-2 rounded-full hover:bg-gray-200 transition-colors duration-150"
-            aria-label="Go back"
-          >
-            <FiChevronLeft className="w-6 h-6" />
-          </button>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">{currentClass.className}</h1>
+        <div className="flex items-center justify-between mb-6 sm:mb-8">
+          <div className="flex items-center">
+            <button
+              onClick={() => navigate(-1)}
+              className="mr-3 text-gray-600 hover:text-gray-900 p-2 rounded-full hover:bg-gray-200 transition-colors duration-150"
+              aria-label="Go back"
+            >
+              <FiChevronLeft className="w-6 h-6" />
+            </button>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 ml-3">{currentClass.className}</h1>
+          </div>
+          {isClassTeacher && (
+            <Link
+              to={`/class/${classId}/edit`}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-md shadow-sm hover:bg-gray-50 transition-colors"
+              title="Edit Class Details"
+            >
+              <FiEdit className="w-4 h-4"/>
+              Edit
+            </Link>
+          )}
         </div>
 
         {/* --- Class Info --- */}
@@ -273,30 +346,66 @@ const ClassDetails = () => {
             </p>
             <p className="flex items-center">
                 <FiUsers className="w-5 h-5 mr-2.5 text-gray-500"/>
-                <span className="font-medium mr-1.5">Students:</span> {currentClass.studentList?.length || 0}
+                <span className="font-medium mr-1.5">Students:</span> {currentClass?.studentList?.length || 0}
+            </p>
+            <p className="flex items-center capitalize">
+                {classTypeInfo.icon}
+                <span className="font-medium mr-1.5">Type:</span> {classTypeInfo.text}
             </p>
         </div>
 
         {/* --- Attendance Section Card --- */}
         <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
-          {!isMarkingMode ? (
-            // Button to Start Attendance - More prominent
+          {/* State 1: Initial View - Show "Start" button */}
+          {!isSelectingType && !isMarkingMode && (
             <div className="p-8 sm:p-10 text-center">
                 <h2 className="text-xl font-semibold text-gray-800 mb-6">Ready to mark attendance?</h2>
                 <button
-                  onClick={handleStartAttendance}
+                  onClick={handleInitiateAttendance} // Calls the first step handler
                   className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-8 rounded-lg shadow hover:shadow-lg transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 text-base"
                 >
                   Start Today's Attendance
                 </button>
             </div>
-          ) : (
-            // Attendance Marking View - Improved Table Look
+          )}
+
+          {/* State 2: Selecting Type */}
+          {isSelectingType && !isMarkingMode && (
+            <div className="p-6 sm:p-8">
+                <h2 className="text-lg font-semibold text-gray-800 mb-5 text-center">Select Session Type</h2>
+                <div className="flex flex-col sm:flex-row justify-center gap-4 mb-6">
+                    <button
+                        onClick={() => handleSelectSessionType('lecture')}
+                        className="flex-1 bg-blue-100 text-blue-700 hover:bg-blue-200 font-medium py-3 px-6 rounded-lg transition-colors duration-150 text-base focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500"
+                    >
+                        Lecture
+                    </button>
+                    <button
+                        onClick={() => handleSelectSessionType('lab')}
+                        className="flex-1 bg-purple-100 text-purple-700 hover:bg-purple-200 font-medium py-3 px-6 rounded-lg transition-colors duration-150 text-base focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-purple-500"
+                    >
+                        Lab
+                    </button>
+                </div>
+                <div className="text-center">
+                     <button
+                        type="button"
+                        onClick={handleCancelAttendanceProcess} // Cancel goes back to initial state
+                        className="text-sm font-medium text-gray-600 hover:text-gray-800"
+                    >
+                        Cancel
+                    </button>
+                </div>
+            </div>
+          )}
+
+          {/* State 3: Marking Mode */}
+          {isMarkingMode && (
             <div>
-              {/* Marking Header - Clearer separation */}
+              {/* Marking Header - Now includes selected session type */}
               <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                  <h2 className="text-xl font-semibold text-slate-800 whitespace-nowrap">
-                    Attendance - {new Date().toLocaleDateString()}
+                  <h2 className="text-xl font-semibold text-slate-800 whitespace-nowrap capitalize">
+                    Attendance ({currentSessionType}) - {new Date().toLocaleDateString()} {/* Show type */}
                   </h2>
                   <button
                     onClick={handleGenerateFrequency}
@@ -307,54 +416,56 @@ const ClassDetails = () => {
                   </button>
               </div>
 
-              {/* Student List as a "Table" Body */}
+              {/* Student List - Use sortedStudentList for rendering */}
               <div className="divide-y divide-slate-200">
-                {currentClass.studentList?.length > 0 ? (
-                  currentClass.studentList.map((student, index) => (
-                    // Subtle alternating background for rows
-                    <div key={student._id} className={`flex items-center justify-between p-5 gap-5 ${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'}`}>
-                      <div className="flex-grow min-w-0">
-                        <p className="text-base font-medium text-slate-900 truncate">{student.fullName}</p>
-                        <p className="text-sm text-slate-500 truncate">{student.email}</p>
-                      </div>
-                      <div className="flex space-x-3 flex-shrink-0">
-                        <button
-                          type="button"
-                          className={`px-4 h-9 rounded-md text-sm font-medium border transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-1 ${
-                            currentDailyAttendance[student._id] === 'present'
-                              ? 'bg-green-600 text-white border-green-600 focus:ring-green-500 shadow-sm'
-                              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400 focus:ring-green-500'
-                          }`}
-                          onClick={() => handleAttendanceChange(student._id, 'present')}
-                        >
-                          Present
-                        </button>
-                        <button
-                          type="button"
-                          className={`px-4 h-9 rounded-md text-sm font-medium border transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-1 ${
-                            currentDailyAttendance[student._id] === 'absent'
-                              ? 'bg-red-600 text-white border-red-600 focus:ring-red-500 shadow-sm'
-                              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400 focus:ring-red-500'
-                          }`}
-                          onClick={() => handleAttendanceChange(student._id, 'absent')}
-                        >
-                          Absent
-                        </button>
-                      </div>
-                    </div>
-                  ))
+                {/* ** NOTE: Real-time updates from student actions require WebSockets or polling ** */}
+                {sortedStudentList.length > 0 ? (
+                    // <<< Use sortedStudentList >>>
+                    sortedStudentList.map((student, index) => (
+                        <div key={student._id} className={`flex items-center justify-between p-5 gap-5 ${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'}`}>
+                            <div className="flex-grow min-w-0">
+                                <p className="text-base font-medium text-slate-900 truncate">{student.fullName}</p>
+                                <p className="text-sm text-slate-500 truncate">{student.email}</p>
+                            </div>
+                            <div className="flex space-x-3 flex-shrink-0">
+                                <button
+                                    type="button"
+                                    className={`px-4 h-9 rounded-md text-sm font-medium border transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-1 ${
+                                        currentDailyAttendance[student._id] === 'present'
+                                            ? 'bg-green-600 text-white border-green-600 focus:ring-green-500 shadow-sm'
+                                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400 focus:ring-green-500'
+                                    }`}
+                                    onClick={() => handleAttendanceChange(student._id, 'present')}
+                                >
+                                    Present
+                                </button>
+                                <button
+                                    type="button"
+                                    className={`px-4 h-9 rounded-md text-sm font-medium border transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-1 ${
+                                        currentDailyAttendance[student._id] === 'absent'
+                                            ? 'bg-red-600 text-white border-red-600 focus:ring-red-500 shadow-sm'
+                                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400 focus:ring-red-500'
+                                    }`}
+                                    onClick={() => handleAttendanceChange(student._id, 'absent')}
+                                >
+                                    Absent
+                                </button>
+                            </div>
+                        </div>
+                    ))
                 ) : (
-                  <p className="text-center text-gray-500 py-8 px-5">No students enrolled in this class.</p>
+                    <p className="text-center text-gray-500 py-8 px-5">No students enrolled in this class.</p>
                 )}
               </div>
 
-              {/* Action Buttons Footer - More prominent */}
+              {/* Action Buttons Footer - Show loading state */}
               {currentClass.studentList?.length > 0 && (
                   <div className="px-6 py-5 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row justify-end items-center gap-4">
                     <button
                         type="button"
-                        onClick={() => setIsMarkingMode(false)}
+                        onClick={handleCancelAttendanceProcess} // Cancel goes back to initial state
                         className="w-full sm:w-auto px-6 py-2.5 text-base font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500"
+                        disabled={attendanceSaving}
                         title="Cancel Attendance Marking"
                     >
                         Cancel
@@ -363,10 +474,15 @@ const ClassDetails = () => {
                       type="button"
                       onClick={saveAttendance}
                       className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 px-6 rounded-md shadow-sm hover:shadow transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 text-base"
+                      disabled={attendanceSaving} // Disable button while saving
                     >
-                      Save Attendance
+                      {attendanceSaving ? 'Saving...' : 'Save Attendance'}
                     </button>
                   </div>
+              )}
+              {/* Display specific save error */}
+              {attendanceError && (
+                  <p className="text-red-500 text-sm text-center pt-3 px-6">Error: {attendanceError}</p>
               )}
             </div>
           )}

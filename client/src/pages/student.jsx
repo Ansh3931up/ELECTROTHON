@@ -2,10 +2,9 @@ import { motion } from 'framer-motion';
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 
-
 import OfflineToggle from "../components/OfflineToggle";
 import detectSound from "../helpers/detectSound";
-import { getfrequencyByClassId,getStudentClasses } from "../redux/slices/classSlice";
+import { getfrequencyByClassId,getStudentClasses, markStudentPresentByFrequency } from "../redux/slices/classSlice";
 import { checkAndRequestPermissions, checkDeviceCapabilities } from '../utils/permissions';
 import { smsReceiver } from "../utils/smsReceiver";
 
@@ -149,58 +148,55 @@ const Student = () => {
 
   const handleStartListening = async (classId) => {
     if (!classFrequencies[classId] || classFrequencies[classId].length === 0) {
-      setStatus("No frequency available for this class");
+      setStatus("No frequency available for this class. Fetch or wait for SMS.");
       return;
+    }
+    if (!user?._id) {
+        setStatus("User information not available.");
+        return;
     }
 
     setLoadingStates(prev => ({ ...prev, listening: true }));
     setStatus("Detecting frequency...");
 
     try {
-      const storedFrequency = classFrequencies[classId];
-      console.log("Using stored frequency:", storedFrequency);
+      const storedFrequency = classFrequencies[classId]; // Array
+      console.log("Using stored frequency for detection:", storedFrequency);
 
-      const detectionResult = await detectSound(
-        setStatus, 
-        storedFrequency,
-        async (isDetected) => {
+      // Assuming detectSound calls the callback with true/false
+      await detectSound(
+        setStatus,
+        storedFrequency, // Pass the array
+        async (isDetected, detectedFreqValue) => { // Assuming detectSound provides the exact detected value
+          setLoadingStates(prev => ({ ...prev, listening: false })); // Stop loading indicator
+
           if (isDetected) {
-            try {
-              // Send attendance data to server
-              const response = await fetch('/api/v1/attendance/mark', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  userId: user._id,
-                  classId: classId,
-                  detectedfrequency: storedFrequency[0] // Send the detected frequency
-                })
-              });
-
-              if (!response.ok) {
-                throw new Error('Failed to mark attendance');
-              }
-
-              setStatus("Attendance marked successfully! ✅");
-            } catch (error) {
-              console.error('Error marking attendance:', error);
-              setStatus("Failed to mark attendance. Please try again.");
-            }
+            setStatus("Frequency detected! Marking attendance...");
+            // --- Call the NEW backend endpoint ---
+            dispatch(markStudentPresentByFrequency({
+                classId: classId,
+                studentId: user._id,
+                detectedFrequency: detectedFreqValue || storedFrequency[0] // Send detected or expected freq
+            }))
+            .unwrap()
+            .then(result => {
+                setStatus("Attendance marked successfully! ✅");
+                console.log("Marking success:", result);
+            })
+            .catch(err => {
+                 setStatus(`Failed to mark attendance: ${err || 'Unknown error'}`);
+                 console.error("Marking error:", err);
+            });
+            // ------------------------------------
           } else {
-            setStatus("Frequency detection failed. Please try again.");
+            setStatus("Frequency detection failed. Please ensure you are in the right place.");
           }
-          setLoadingStates(prev => ({ ...prev, listening: false }));
         }
       );
 
-      if (!detectionResult) {
-        throw new Error('Failed to start frequency detection');
-      }
     } catch (error) {
-      console.error('Error in frequency detection:', error);
-      setStatus("Error detecting frequency. Please try again.");
+      console.error('Error starting frequency detection:', error);
+      setStatus("Error starting detection. Please try again.");
       setLoadingStates(prev => ({ ...prev, listening: false }));
     }
   };

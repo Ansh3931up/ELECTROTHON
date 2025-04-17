@@ -1,20 +1,17 @@
 import "./App.css";
-
 import { Navigate, Route, Routes } from "react-router-dom";
+import PropTypes from 'prop-types';
 
+import ClassDetails from './pages/ClassDetails';
+import EditClass from './pages/EditClass';
 import Home from "./pages/Home.jsx";
 import Login from "./pages/login.jsx";
 import Signup from "./pages/signUp.jsx";
 import Student from "./pages/student.jsx";
 import Teacher from "./pages/teacher.jsx";
-import ClassDetails from './pages/ClassDetails';
 
 function App() {
   // Function to check if user is authenticated from localStorage
-  const isAuthenticated = () => {
-    return localStorage.getItem('token') !== null;
-  };
-
   const getUserRole = () => {
     // Get role from localStorage (will be set during login)
     console.log(localStorage.getItem('userRole'));
@@ -37,6 +34,11 @@ function App() {
     }
 
     return children;
+  };
+
+  // Add prop types validation
+  ProtectedRoute.propTypes = {
+    children: PropTypes.node.isRequired,
   };
 
   // Role-based redirect after login
@@ -74,6 +76,7 @@ function App() {
         />
         <Route path="/teacher" element={<Teacher />} />
         <Route path="/class/:classId" element={<ClassDetails />} />
+        <Route path="/class/:classId/edit" element={<EditClass />} />
         {/* <Route path="/redirect" element={<RoleBasedRedirect />} /> */}
       </Routes>
     </>
