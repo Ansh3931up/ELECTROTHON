@@ -186,3 +186,35 @@ export const getStudentClasses = async (req, res, next) => {
     next(new AppError(error.message, 500));
   }
 };
+
+// <<< NEW FUNCTION to get details for a specific class >>>
+export const getClassDetails = async (req, res, next) => {
+  try {
+    const { classId } = req.params;
+
+    if (!classId) {
+      return next(new AppError("Class ID is required", 400));
+    }
+
+    // Find the class by ID and populate studentList and teacherId
+    const classDetails = await Class.findById(classId)
+      .populate('studentList', 'fullName email _id') // Select fields you need for students
+      .populate('teacherId', 'fullName email _id'); // Select fields you need for the teacher
+
+    if (!classDetails) {
+      return next(new AppError("Class not found", 404));
+    }
+
+    res.status(200).json({
+      success: true,
+      class: classDetails, // Return the populated class details
+    });
+
+  } catch (error) {
+    // Handle potential CastError if classId is not a valid ObjectId format
+    if (error.name === 'CastError') {
+       return next(new AppError(`Invalid Class ID format: ${classId}`, 400));
+    }
+    return next(new AppError(error.message, 500));
+  }
+};

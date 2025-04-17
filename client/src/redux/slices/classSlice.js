@@ -1,7 +1,7 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import axios from "axios";
 
-const API_URL = "https://electrothon.onrender.com/api/v1" + "/class";
+const API_URL = "http://localhost:5014/api/v1" + "/class";
 
 // Get teacher's classes
 export const getTeacherClasses = createAsyncThunk(
@@ -81,6 +81,31 @@ export const getfrequencyByClassId = createAsyncThunk(
   }
 );
 
+// Fetches details for a single class by ID
+export const fetchClassDetails = createAsyncThunk(
+  "class/fetchDetails",
+  async (classId, { rejectWithValue }) => {
+    try {
+      const token = localStorage.getItem("token"); // Or however you get the auth token
+      const response = await axios.get(`${API_URL}/${classId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      return response.data; // Assuming the API returns the class object directly, e.g., { success: true, class: {...} } or just {...}
+    } catch (error) {
+      // Handle potential errors (network, server response, etc.)
+      const message =
+        (error.response &&
+          error.response.data &&
+          error.response.data.message) ||
+        error.message ||
+        error.toString();
+      return rejectWithValue(message);
+    }
+  }
+);
+
 const classSlice = createSlice({
   name: "class",
   initialState: {
@@ -89,10 +114,15 @@ const classSlice = createSlice({
     loading: false,
     error: null,
     selectedClass: null,
+    currentClass: null,
   },
   reducers: {
     setSelectedClass: (state, action) => {
       state.selectedClass = action.payload;
+    },
+    clearCurrentClass: (state) => {
+      state.currentClass = null;
+      state.error = null;
     },
   },
   extraReducers: (builder) => {
@@ -159,9 +189,23 @@ const classSlice = createSlice({
       .addCase(getfrequencyByClassId.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
+      })
+      .addCase(fetchClassDetails.pending, (state) => {
+        state.loading = true;
+        state.currentClass = null;
+        state.error = null;
+      })
+      .addCase(fetchClassDetails.fulfilled, (state, action) => {
+        state.loading = false;
+        state.currentClass = action.payload.class || action.payload;
+      })
+      .addCase(fetchClassDetails.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+        state.currentClass = null;
       });
   },
 });
 
-export const { setSelectedClass } = classSlice.actions;
+export const { setSelectedClass, clearCurrentClass } = classSlice.actions;
 export default classSlice.reducer;

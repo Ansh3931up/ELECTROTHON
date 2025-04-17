@@ -5,9 +5,9 @@ import { Toaster } from "react-hot-toast";
 import { Provider } from "react-redux";
 import { BrowserRouter } from "react-router-dom";
 
-import NavBar from "./components/NavBar.jsx";
-
 import App from "./App.jsx";
+
+import NavBar from "./components/NavBar.jsx";
 import store from "./redux/store.js";
 
 createRoot(document.getElementById("root")).render(
@@ -16,6 +16,7 @@ createRoot(document.getElementById("root")).render(
     <NavBar />
       <App />
       <Toaster />
+      
     </BrowserRouter>
   </Provider>
 );

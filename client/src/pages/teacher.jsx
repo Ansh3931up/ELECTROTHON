@@ -1,26 +1,16 @@
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import { useNavigate } from "react-router-dom";
+import { FiSearch } from 'react-icons/fi';
 
 import OfflineToggle from "../components/OfflineToggle";
 import { fetchAllStudents } from "../redux/slices/authSlice";
-import { createClass, generatefrequency, getTeacherClasses } from "../redux/slices/classSlice";
-import { sendFrequencySMS, storeOfflineFrequency } from "../utils/offlineMode";
-
-const generateRandomFrequency = () => {
-  const minFreq = 1000; // 1 kHz
-  const maxFreq = 8000; // 8 kHz
-  const frequency = new Set();
-
-  while (frequency.size < 1) {
-    const randomFreq = Math.floor(Math.random() * (maxFreq - minFreq + 1)) + minFreq;
-    frequency.add(randomFreq);
-  }
-
-  return Array.from(frequency);
-};
+import { createClass, getTeacherClasses } from "../redux/slices/classSlice";
+import BottomNavBar from "../components/BottomNavBar";
 
 const Teacher = () => {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const user = useSelector((state) => state.auth.user.user);
   const students = useSelector((state) => state.auth.students);
   const { classes, error } = useSelector((state) => state.class);
@@ -30,19 +20,10 @@ const Teacher = () => {
     time: "",
     studentIds: [],
   });
-  const [classFrequencies, setClassFrequencies] = useState({});
-  const [disabledButtons, setDisabledButtons] = useState({});
   const [isOffline, setIsOffline] = useState(false);
-  const [studentPhone, setStudentPhone] = useState("");
-  const [showSMSForm, setShowSMSForm] = useState(false);
-  const [selectedClassId, setSelectedClassId] = useState(null);
-  const [showClassDetails, setShowClassDetails] = useState(false);
-  const [selectedClass, setSelectedClass] = useState(null);
-  const [attendanceData, setAttendanceData] = useState({});
-  const [showFrequencyPopup, setShowFrequencyPopup] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [audioContext, setAudioContext] = useState(null);
-  const [oscillator, setOscillator] = useState(null);
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isSidebarOpen, setSidebarOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     if (user?._id) {
@@ -76,326 +57,89 @@ const Teacher = () => {
     setIsOffline(offline);
   };
 
-  const handleGenerateFrequency = async (classId) => {
-    setDisabledButtons(prev => ({ ...prev, [classId]: true }));
-    setTimeout(() => {
-      setDisabledButtons(prev => ({ ...prev, [classId]: false }));
-    }, 5000);
-
-    const newFrequency = await generateRandomFrequency();
-    
-    if (isOffline) {
-      setSelectedClassId(classId);
-      setShowSMSForm(true);
-      setClassFrequencies(prev => ({ ...prev, [classId]: newFrequency }));
-      storeOfflineFrequency(newFrequency);
-    } else {
-      const result = await dispatch(generatefrequency({ 
-        classId, 
-        teacherId: user._id,
-        frequency: newFrequency
-      }));
-      if (generatefrequency.fulfilled.match(result)) {
-        setClassFrequencies(prev => ({ ...prev, [classId]: result.payload }));
-        setShowFrequencyPopup(true);
-      }
-    }
-  };
-
-  const handleSendSMS = async () => {
-    if (!studentPhone || !selectedClassId) return;
-
-    const frequency = classFrequencies[selectedClassId];
-    const success = await sendFrequencySMS(frequency, studentPhone);
-    
-    if (success) {
-      setShowSMSForm(false);
-      setStudentPhone("");
-      setSelectedClassId(null);
-    }
-  };
-
   const handleClassClick = (cls) => {
-    setSelectedClass(cls);
-    setShowClassDetails(true);
-    
-    // Initialize attendance data for all students in the class
-    const initialAttendance = {};
-    cls.studentList?.forEach(student => {
-      initialAttendance[student._id] = "present"; // Default to present
-    });
-    setAttendanceData(initialAttendance);
+    navigate(`/class/${cls._id}`);
   };
 
-  const handleAttendanceChange = (studentId, status) => {
-    setAttendanceData(prev => ({
-      ...prev,
-      [studentId]: status
-    }));
-  };
+  const filteredClasses = classes.filter(cls =>
+    cls.className.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
-  const togglePlaySound = () => {
-    if (!audioContext) {
-      // Create new audio context
-      const newAudioContext = new (window.AudioContext || window.webkitAudioContext)();
-      const frequency = classFrequencies[selectedClass._id][0];
-      
-      setAudioContext(newAudioContext);
-      setIsPlaying(true);
-      
-      // Play sound with pattern: 3s on, 0.5s off, 3s on, 0.5s off, 3s on
-      let intervalCount = 0;
-      
-      // Function to play one interval
-      const playOneInterval = () => {
-        // Create a new oscillator for each interval
-        const newOscillator = newAudioContext.createOscillator();
-        
-        // Make the sound less harsh by adding a gain node and ramping volume
-        const gainNode = newAudioContext.createGain();
-        gainNode.gain.value = 0.2; // Lower volume to 20% of maximum
-        
-        // Connect oscillator to gain node and then to output
-        newOscillator.type = 'sine';
-        newOscillator.frequency.setValueAtTime(frequency, newAudioContext.currentTime);
-        newOscillator.connect(gainNode);
-        gainNode.connect(newAudioContext.destination);
-        
-        // Start playing
-        newOscillator.start();
-        setOscillator(newOscillator);
-        
-        // Play for 3 seconds then stop
-        setTimeout(() => {
-          newOscillator.stop();
-          newOscillator.disconnect();
-          
-          // Increment the interval counter
-          intervalCount++;
-          
-          // If we haven't played 3 times yet, schedule the next interval
-          if (intervalCount < 3) {
-            // Wait 0.5 seconds before playing the next interval
-            setTimeout(() => {
-              // Make sure audio context is still available
-              if (newAudioContext && !newAudioContext.closed) {
-                playOneInterval();
-              }
-            }, 500); // 0.5 second pause between intervals
-          } else {
-            // After all 3 intervals, reset the state
-            setIsPlaying(false);
-            setOscillator(null);
-            
-            // Close the audio context
-            if (newAudioContext && !newAudioContext.closed) {
-              newAudioContext.close();
-              setAudioContext(null);
-            }
-          }
-        }, 3000); // 3 seconds per play interval
-      };
-      
-      // Start playing the first interval
-      playOneInterval();
-      
-    } else {
-      // Stop all playing sounds
-      if (oscillator) {
-        oscillator.stop();
-        oscillator.disconnect();
-      }
-      
-      if (audioContext) {
-        audioContext.close();
-      }
-      setAudioContext(null);
-      setOscillator(null);
-      setIsPlaying(false);
-    }
-  };
-
-  const closeFrequencyPopup = () => {
-    if (isPlaying && oscillator) {
-      oscillator.stop();
-      oscillator.disconnect();
-    }
-    if (audioContext) {
-      audioContext.close();
-    }
-    setAudioContext(null);
-    setOscillator(null);
-    setIsPlaying(false);
-    setShowFrequencyPopup(false);
-  };
-
-  const saveAttendance = async () => {
-    try {
-      // Format the attendance data
-      const attendancePayload = Object.entries(attendanceData).map(([studentId, status]) => ({
-        studentId,
-        status,
-        classId: selectedClass._id,
-        date: new Date().toISOString()
-      }));
-
-      // Make API call to save attendance
-      const response = await fetch('/api/v1/attendance/batch', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          attendanceRecords: attendancePayload,
-          classId: selectedClass._id,
-          recordedBy: user._id
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to save attendance');
-      }
-
-      alert('Attendance saved successfully!');
-      // Go back to class list
-      setShowClassDetails(false);
-      setSelectedClass(null);
-    } catch (error) {
-      console.error('Error saving attendance:', error);
-      alert('Failed to save attendance: ' + error.message);
-    }
+  const handleSearchChange = (e) => {
+    setSearchTerm(e.target.value);
   };
 
   return (
-    <div>
-      
-      <div className="p-6">
-        <div className="flex justify-between items-center mb-4">
-          <h1 className="text-2xl font-bold">Teacher Dashboard</h1>
+    <div className="pb-16 min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50">
+      <div className="p-4">
+        {/* <div className="flex justify-end items-center mb-6 bg-white/80 backdrop-blur-sm p-4 rounded-xl shadow-sm">
           <OfflineToggle onModeChange={handleOfflineModeChange} />
+        </div> */}
+
+        <div className="mb-6 relative">
+          <input
+            type="text"
+            placeholder="Search classes..."
+            value={searchTerm}
+            onChange={handleSearchChange}
+            className="w-full px-4 py-2 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm"
+          />
+          <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+            <FiSearch className="w-5 h-5 text-gray-400" />
+          </div>
         </div>
 
-        {!showClassDetails ? (
-          // Classes List View
-          <>
-            {/* Create Class Button */}
-            <button
-              onClick={() => setShowCreateForm(true)}
-              className="bg-blue-500 text-white px-4 py-2 rounded mb-4"
-            >
-              Create New Class
-            </button>
+        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
+          {filteredClasses.length > 0 ? (
+            filteredClasses.map((cls, index) => {
+              const palettes = [
+                { bg: 'bg-gradient-to-br from-blue-50 to-blue-100', decor: 'from-blue-200 to-blue-300', shadow: 'from-blue-400 to-indigo-400' },
+                { bg: 'bg-gradient-to-br from-purple-50 to-purple-100', decor: 'from-purple-200 to-purple-300', shadow: 'from-purple-400 to-pink-400' },
+                { bg: 'bg-gradient-to-br from-green-50 to-green-100', decor: 'from-green-200 to-green-300', shadow: 'from-green-400 to-teal-400' },
+                { bg: 'bg-gradient-to-br from-yellow-50 to-yellow-100', decor: 'from-yellow-200 to-yellow-300', shadow: 'from-yellow-400 to-orange-400' },
+              ];
+              const palette = palettes[index % palettes.length];
 
-            {/* Classes Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-              {classes.map((cls) => (
-                <div 
-                  key={cls._id} 
-                  className="border rounded-lg p-4 shadow hover:shadow-lg transition-all cursor-pointer"
+              return (
+                <div
+                  key={cls._id}
+                  className="group relative transform transition-all duration-300 hover:-translate-y-1"
                   onClick={() => handleClassClick(cls)}
                 >
-                  <h3 className="font-bold text-lg">{cls.className}</h3>
-                  <p className="text-gray-600">Time: {new Date(cls.time).toLocaleString()}</p>
-                  <p className="text-gray-600">Students: {cls.studentList?.length || 0}</p>
+                  <div className={`absolute inset-0 bg-gradient-to-r ${palette.shadow} rounded-xl transform transition-transform group-hover:scale-[1.01] blur-sm opacity-20`}></div>
+
+                  <div className={`relative ${palette.bg} rounded-xl p-4 shadow-md hover:shadow-lg transition-all cursor-pointer border border-gray-200/50 overflow-hidden`}>
+                    <div className={`absolute top-0 right-0 w-12 h-12 bg-gradient-to-br ${palette.decor} rounded-bl-full rounded-tr-xl opacity-60`}></div>
+
+                    <div className="relative z-10">
+                      <h3 className="font-semibold text-md text-gray-800 mb-1 truncate">{cls.className}</h3>
+                      <div className="space-y-1 text-xs">
+                        <p className="flex items-center text-gray-600">
+                          <svg className="w-3 h-3 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          {new Date(cls.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                        <p className="flex items-center text-gray-600">
+                          <svg className="w-3 h-3 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                          </svg>
+                          {cls.studentList?.length || 0} Students
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              ))}
-            </div>
-          </>
-        ) : (
-          // Class Details View
-          <div className="animate-fadeIn">
-            <div className="flex items-center mb-4">
-              <button 
-                onClick={() => setShowClassDetails(false)}
-                className="mr-4 bg-gray-200 p-2 rounded-full"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-              <h2 className="text-xl font-bold">{selectedClass.className}</h2>
-            </div>
+              );
+            })
+          ) : (
+              <p className="col-span-full text-center text-gray-500 mt-4">No classes found matching your search.</p>
+          )}
+        </div>
 
-            <div className="mb-6 flex justify-between items-center">
-              <div>
-                <p>Class Time: {new Date(selectedClass.time).toLocaleString()}</p>
-                <p>Total Students: {selectedClass.studentList?.length || 0}</p>
-              </div>
-              
-              <button
-                onClick={() => handleGenerateFrequency(selectedClass._id)}
-                className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-6 rounded-lg shadow-lg transition-all transform hover:scale-105"
-                disabled={disabledButtons[selectedClass._id]}
-              >
-                Special
-              </button>
-            </div>
-
-            {/* Students Attendance Table */}
-            <div className="bg-white rounded-lg shadow-md overflow-hidden">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Attendance</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {selectedClass.studentList?.map((student) => (
-                    <tr key={student._id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">{student.fullName}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-500">{student.email}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex space-x-2">
-                          <button
-                            className={`px-3 py-1 rounded-full text-xs font-medium ${
-                              attendanceData[student._id] === 'present' 
-                                ? 'bg-green-100 text-green-800 border-2 border-green-500' 
-                                : 'bg-green-50 text-green-600 border border-green-200'
-                            }`}
-                            onClick={() => handleAttendanceChange(student._id, 'present')}
-                          >
-                            Present
-                          </button>
-                          <button
-                            className={`px-3 py-1 rounded-full text-xs font-medium ${
-                              attendanceData[student._id] === 'absent' 
-                                ? 'bg-red-100 text-red-800 border-2 border-red-500' 
-                                : 'bg-red-50 text-red-600 border border-red-200'
-                            }`}
-                            onClick={() => handleAttendanceChange(student._id, 'absent')}
-                          >
-                            Absent
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="mt-6 flex justify-end">
-              <button
-                onClick={saveAttendance}
-                className="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-6 rounded-lg shadow"
-              >
-                Save Attendance
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Enhanced Create Class Form Modal */}
         {showCreateForm && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
             <div className="bg-white rounded-2xl shadow-xl w-full max-w-md transform transition-all">
-              {/* Modal Header */}
               <div className="border-b border-gray-100 px-6 py-4">
                 <div className="flex items-center justify-between">
                   <h2 className="text-2xl font-semibold text-gray-800">Create New Class</h2>
@@ -411,9 +155,7 @@ const Teacher = () => {
                 <p className="text-sm text-gray-500 mt-1">Fill in the details to create a new class</p>
               </div>
 
-              {/* Modal Body */}
               <form onSubmit={handleCreateClass} className="p-6 space-y-6">
-                {/* Class Name Input */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Class Name
@@ -436,7 +178,6 @@ const Teacher = () => {
                   </div>
                 </div>
 
-                {/* Class Time Input */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Class Time
@@ -451,7 +192,6 @@ const Teacher = () => {
                   />
                 </div>
 
-                {/* Student Selection */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Select Students
@@ -482,7 +222,6 @@ const Teacher = () => {
                   </div>
                 </div>
 
-                {/* Modal Footer */}
                 <div className="flex items-center justify-end space-x-3 pt-4 border-t border-gray-100">
                   <button
                     type="button"
@@ -503,96 +242,14 @@ const Teacher = () => {
           </div>
         )}
 
-        {/* SMS Form Modal */}
-        {showSMSForm && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
-              <h2 className="text-xl font-semibold mb-4">Send Frequency via SMS</h2>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Student Phone Number
-                </label>
-                <input
-                  type="tel"
-                  value={studentPhone}
-                  onChange={(e) => setStudentPhone(e.target.value)}
-                  placeholder="Enter phone number"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                />
-              </div>
-              <div className="flex justify-end space-x-3">
-                <button
-                  onClick={() => setShowSMSForm(false)}
-                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSendSMS}
-                  className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
-                >
-                  Send SMS
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Frequency Popup */}
-        {showFrequencyPopup && selectedClass && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-semibold">Frequency Sound</h2>
-                <button
-                  onClick={closeFrequencyPopup}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-
-              <div className="mb-4 p-4 bg-gray-100 rounded-lg">
-                <h3 className="text-lg font-medium mb-2">Active Frequency</h3>
-                <div className="text-center">
-                  <span className="text-3xl font-mono text-blue-600">
-                    {classFrequencies[selectedClass._id]?.[0]} Hz
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex justify-center">
-                <button
-                  onClick={togglePlaySound}
-                  className={`flex items-center justify-center w-16 h-16 rounded-full shadow-lg ${
-                    isPlaying ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'
-                  } text-white transition-colors`}
-                >
-                  {isPlaying ? (
-                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  ) : (
-                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  )}
-                </button>
-              </div>
-
-              <p className="mt-4 text-sm text-gray-500 text-center">
-                {isPlaying 
-                  ? "Sound is playing. Click to pause." 
-                  : "Click to play the frequency sound."}
-              </p>
-            </div>
-          </div>
-        )}
-
         {error && <p className="text-red-500 mt-2">{error}</p>}
+
+        <BottomNavBar 
+          user={user} 
+          isDarkMode={isDarkMode} 
+          setSidebarOpen={setSidebarOpen}
+          onCreateClass={() => setShowCreateForm(true)}
+        />
       </div>
     </div>
   );

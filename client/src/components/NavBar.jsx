@@ -1,14 +1,58 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import logo from '../assets/logo1112.png';
 import { logoutUser } from '../redux/slices/authSlice';
+import BottomNavBar from './BottomNavBar';
+import { FiAlignRight } from 'react-icons/fi';
 
 const NavBar = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const location = useLocation();
   const user = useSelector((state) => state.auth.user);
   const [isSidebarOpen, setSidebarOpen] = useState(false);
+  const [isLogoAnimating, setIsLogoAnimating] = useState(false);
+  const [currentPage, setCurrentPage] = useState('');
+  const [isDarkMode, setIsDarkMode] = useState(false);
+
+  // Determine current page name based on URL path
+  useEffect(() => {
+    const path = location.pathname;
+    
+    // Map paths to readable page names
+    if (path === '/' || path === '/home') {
+      setCurrentPage('Home');
+    } else if (path === '/dashboard') {
+      setCurrentPage('Dashboard');
+    } else if (path === '/classes') {
+      setCurrentPage('Classes');
+    } else if (path === '/reports') {
+      setCurrentPage('Reports');
+    } else if (path === '/profile') {
+      setCurrentPage('My Profile');
+    } else if (path === '/account') {
+      setCurrentPage('Account Settings');
+    } else if (path === '/notifications') {
+      setCurrentPage('Notifications');
+    } else if (path === '/help') {
+      setCurrentPage('Help Center');
+    } else if (path === '/contact') {
+      setCurrentPage('Contact Support');
+    } else if (path === '/login') {
+      setCurrentPage('Login');
+    } else if (path === '/signup') {
+      setCurrentPage('Sign Up');
+    } else if (path === '/add') {
+      setCurrentPage('Add New');
+    } else if (path === '/search') {
+      setCurrentPage('Search');
+    } else {
+      // Extract page name from the path
+      const pageName = path.split('/').pop();
+      setCurrentPage(pageName.charAt(0).toUpperCase() + pageName.slice(1));
+    }
+  }, [location.pathname]);
 
   // Close sidebar when clicking outside
   useEffect(() => {
@@ -28,6 +72,19 @@ const NavBar = () => {
     localStorage.removeItem('userRole');
     navigate('/login');
     setSidebarOpen(false);
+  };
+
+  // Handle logo click for refresh and animation
+  const handleLogoClick = () => {
+    setIsLogoAnimating(true);
+    
+    // Reset animation after it completes
+    setTimeout(() => {
+      setIsLogoAnimating(false);
+    }, 1000);
+    
+    // Refresh the page
+    window.location.reload();
   };
 
   // Main navigation items
@@ -134,21 +191,32 @@ const NavBar = () => {
       <path d="M20 12H7M20 12L17 9M20 12L17 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
+  console.log("user is : ",user);
 
   return (
     <>
       {/* Mobile-optimized navbar with gradient */}
-      <nav className="bg-gradient-to-r from-[#002040] to-[#003065] shadow-lg text-white fixed top-0 left-0 right-0 z-50">
+      <nav className="bg-gradient-to-r from-[#003065]  to-[#002040] rounded-b-sm shadow-lg text-white fixed top-0 left-0 right-0 z-50">
         <div className="max-w-screen-sm mx-auto px-4 py-2.5 flex justify-between items-center">
-          {/* Logo */}
+          {/* Logo and page title */}
           <div className="flex items-center">
-            <div className="relative flex items-center group">
-              <div className="w-8 h-8 flex items-center justify-center overflow-hidden">
+            <div 
+              className="relative flex items-center group cursor-pointer"
+              onClick={handleLogoClick}
+            >
+              <div className={`w-8 h-8 flex items-center justify-center overflow-hidden glow-container ${isLogoAnimating ? 'animate-glow glow-active' : ''}`}>
                 <img src={logo} alt="Logo" className="w-full h-full object-contain" />
               </div>
-              <h1 className="text-lg font-medium ml-2.5 tracking-wide">
-                <span className="font-semibold text-white">Attendance App</span>
-              </h1>
+              <div className="flex flex-col">
+                <h1 className={`text-lg font-medium ml-2.5 tracking-wide ${isLogoAnimating ? 'animate-glow' : ''}`}>
+                  <span className="font-semibold text-white">Neura<span className='text-sky-400'>Campus </span></span>
+                </h1>
+                {currentPage && (
+                  <span className="text-xs ml-2.5 text-blue-200 font-medium tracking-wider">
+                    {currentPage}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -162,10 +230,8 @@ const NavBar = () => {
                 aria-label="Toggle menu"
               >
                 <div className="w-5 h-5 relative">
-                  <span className={`absolute h-0.5 w-5 bg-white transform transition-all duration-300 ease-in-out ${isSidebarOpen ? 'rotate-45 top-2' : 'rotate-0 top-0.5'}`}></span>
-                  <span className={`absolute h-0.5 bg-white transform transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-0 opacity-0' : 'w-5 opacity-100'} top-2`}></span>
-                  <span className={`absolute h-0.5 w-5 bg-white transform transition-all duration-300 ease-in-out ${isSidebarOpen ? '-rotate-45 top-2' : 'rotate-0 top-3.5'}`}></span>
-                </div>
+                 <FiAlignRight size={22} />
+                 </div>
           </button>
         ) : (
               <button 
@@ -313,6 +379,16 @@ const NavBar = () => {
 
       {/* Add spacing to prevent content from hiding under the navbar */}
       <div className="pt-[3.25rem]"></div>
+
+      {/* Add the BottomNavBar component with user role */}
+      <BottomNavBar 
+        user={user} 
+        isDarkMode={isDarkMode} 
+        setSidebarOpen={setSidebarOpen} 
+      />
+
+      {/* Add padding to the bottom to account for the bottom navigation */}
+      <div className="pb-2"></div>
     </>
   );
 };

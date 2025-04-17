@@ -7,6 +7,7 @@ import Login from "./pages/login.jsx";
 import Signup from "./pages/signUp.jsx";
 import Student from "./pages/student.jsx";
 import Teacher from "./pages/teacher.jsx";
+import ClassDetails from './pages/ClassDetails';
 
 function App() {
   // Function to check if user is authenticated from localStorage
@@ -56,7 +57,7 @@ function App() {
         <Route path="/signup" element={<Signup />} />
         <Route path="/login" element={<Login />} />
         <Route
-          path="/teacher"
+          path="/teacher/attendance"
           element={
             <ProtectedRoute>
               <Teacher />
@@ -71,6 +72,8 @@ function App() {
             </ProtectedRoute>
           }
         />
+        <Route path="/teacher" element={<Teacher />} />
+        <Route path="/class/:classId" element={<ClassDetails />} />
         {/* <Route path="/redirect" element={<RoleBasedRedirect />} /> */}
       </Routes>
     </>
