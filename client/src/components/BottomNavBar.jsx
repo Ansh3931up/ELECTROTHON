@@ -3,11 +3,11 @@ import { useEffect, useState } from 'react';
 import { 
 FiBook, FiCalendar,
 FiHome, FiMenu, FiPlus,FiPlusCircle, 
-FiSearch,   FiUser, FiX} from 'react-icons/fi';
+FiUser, FiX} from 'react-icons/fi';
 import { useDispatch, useSelector } from 'react-redux';
-import { Link, useLocation } from 'react-router-dom';
-import { useTheme } from '../context/ThemeContext'; // Import useTheme
+import {  NavLink,useLocation } from 'react-router-dom';
 
+import { useTheme } from '../context/ThemeContext'; // Import useTheme
 import { fetchAllStudents } from '../redux/slices/authSlice';
 import { createClass } from '../redux/slices/classSlice';
 
@@ -169,7 +169,7 @@ const BottomNavBar = ({ user }) => {
         setFormError(''); // Clear errors when opening modal
       }
     },
-    { label: 'Search', path: '/search', icon: <FiSearch size={20} /> },
+    { label: 'Timetable', path: '/timetable', icon: <FiCalendar size={20} /> },
     { label: 'Attendence', path: '/teacher/attendance', icon: <FiMenu size={20} />},
   ];
   
@@ -227,7 +227,7 @@ const BottomNavBar = ({ user }) => {
                     </div>
                   </button>
                 ) : (
-                  <Link
+                  <NavLink
                     to={item.path}
                     className={`w-full py-3 flex flex-col items-center justify-center transition-colors ${isActive ? activeClass : inactiveClass}`}
                   >
@@ -235,7 +235,7 @@ const BottomNavBar = ({ user }) => {
                       {item.icon}
                     </div>
                     <span className="text-xs mt-1">{item.label}</span>
-                  </Link>
+                  </NavLink>
                 )}
               </div>
             );

@@ -9,9 +9,11 @@ import {
   getClassDetails,
   saveDailyAttendance,
   markStudentPresentByFrequency,
-  editClassDetails
+  editClassDetails,
+  getTeacherSchedule
 } from "../controllers/class.controllers.js";
 import upload from "../middlewares/multer.middleware.js";
+// import { checkRole } from '../middleware/role.middleware.js';
 
 const router = Router();
 router.post("/create-class",verifyJWT, registerClass);
@@ -24,6 +26,8 @@ router.get('/frequency/:classId', getClassfrequency);
 router.get('/teacher/:teacherId', getTeacherClasses);
 router.get('/student/:studentId', getStudentClasses);
 
+// --- NEW ROUTE for Teacher's Schedule ---
+router.get('/my-schedule', verifyJWT, getTeacherSchedule);
 // --- Attendance Route ---
 // Note: Placed *before* the generic /:classId GET route to avoid conflict
 router.post('/:classId/attendance', saveDailyAttendance);
@@ -34,5 +38,7 @@ router.get('/:classId', getClassDetails);
 
 // --- Class Routes ---
 router.patch('/:classId', verifyJWT, editClassDetails);
+
+
 
 export default router;

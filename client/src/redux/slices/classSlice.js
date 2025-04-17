@@ -1,6 +1,7 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import axios from "axios";
 
+
 const API_URL = "http://localhost:5014/api/v1" + "/class";
 
 // Get teacher's classes
@@ -205,6 +206,32 @@ export const editClassDetails = createAsyncThunk(
   }
 );
 
+// --- NEW Async Thunk ---
+export const fetchTeacherSchedule = createAsyncThunk(
+    'class/fetchTeacherSchedule',
+    async (_, thunkAPI) => {
+        try {
+          const token = localStorage.getItem("token");
+          const response = await axios.get(`${API_URL}/my-schedule`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          });// Use your API client
+            console.log("Received schedule:", response.data);
+            return response.data.data;
+        } catch (error) {
+            const message =
+                (error.response &&
+                    error.response.data &&
+                    error.response.data.message) ||
+                error.message ||
+                error.toString();
+            return thunkAPI.rejectWithValue(message);
+        }
+    }
+);
+
 const classSlice = createSlice({
   name: "class",
   initialState: {
@@ -216,6 +243,12 @@ const classSlice = createSlice({
     currentClass: null,
     attendanceSaving: false, // <<< NEW: Specific loading state for saving
     attendanceError: null,   // <<< NEW: Specific error state for saving
+    // --- NEW State for Teacher Schedule ---
+    teacherSchedule: {
+        data: [],
+        loading: false,
+        error: null,
+    },
   },
   reducers: {
     setSelectedClass: (state, action) => {
@@ -227,6 +260,10 @@ const classSlice = createSlice({
     },
     clearAttendanceError: (state) => {
         state.attendanceError = null;
+    },
+    // Potentially add a reducer to clear teacher schedule if needed
+    clearTeacherSchedule: (state) => {
+         state.teacherSchedule = { data: [], loading: false, error: null };
     }
   },
   extraReducers: (builder) => {
@@ -363,9 +400,23 @@ const classSlice = createSlice({
       .addCase(editClassDetails.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload; // Store the error message
+      })
+      // --- NEW Extra Reducers for Teacher Schedule ---
+      .addCase(fetchTeacherSchedule.pending, (state) => {
+        state.teacherSchedule.loading = true;
+        state.teacherSchedule.error = null;
+      })
+      .addCase(fetchTeacherSchedule.fulfilled, (state, action) => {
+        state.teacherSchedule.loading = false;
+        state.teacherSchedule.data = action.payload; // Store the array of classes
+      })
+      .addCase(fetchTeacherSchedule.rejected, (state, action) => {
+        state.teacherSchedule.loading = false;
+        state.teacherSchedule.error = action.payload;
+        state.teacherSchedule.data = []; // Clear data on error
       });
   },
 });
 
-export const { setSelectedClass, clearCurrentClass, clearAttendanceError } = classSlice.actions;
+export const { setSelectedClass, clearCurrentClass, clearAttendanceError, clearTeacherSchedule } = classSlice.actions;
 export default classSlice.reducer;

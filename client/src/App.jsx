@@ -10,8 +10,12 @@ import Login from "./pages/login.jsx";
 import Signup from "./pages/signUp.jsx";
 import Student from "./pages/student.jsx";
 import Teacher from "./pages/teacher.jsx";
+import TeacherTimetable from './pages/TeacherTimetable';
 
 function App() {
+  // const { user, isAuthenticated } = useSelector((state) => state.auth);
+  // const role = user?.user?.role || user?.role;
+
   // Function to check if user is authenticated from localStorage
   const getUserRole = () => {
     // Get role from localStorage (will be set during login)
@@ -78,6 +82,7 @@ function App() {
         <Route path="/teacher" element={<Teacher />} />
         <Route path="/class/:classId" element={<ClassDetails />} />
         <Route path="/class/:classId/edit" element={<EditClass />} />
+        <Route path="/timetable" element={<TeacherTimetable />} />
         {/* <Route path="/redirect" element={<RoleBasedRedirect />} /> */}
       </Routes>
     </>

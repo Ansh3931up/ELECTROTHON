@@ -3,6 +3,8 @@ import Class from "../models/class.model.js";
 import User from "../models/user.model.js";
 import mongoose from 'mongoose'; // Import mongoose for ObjectId validation
 
+
+
 // Create a class by a teacher
 export const registerClass = async (req, res, next) => 
   {
@@ -248,7 +250,7 @@ export const getClassDetails = async (req, res, next) => {
   } catch (error) {
     // Handle potential CastError if classId is not a valid ObjectId format
     if (error.name === 'CastError') {
-       return next(new AppError(`Invalid Class ID format: ${classId}`, 400));
+       return next(new AppError(`Invalid Class ID format: `, 400));
     }
     return next(new AppError(error.message, 500));
   }
@@ -544,4 +546,50 @@ export const editClassDetails = async (req, res, next) => {
         console.error("Error editing class:", error); // Log error
         next(new AppError(error.message || "Failed to update class details", 500));
     }
+};
+
+/**
+ * @desc    Get schedule for all classes taught by the logged-in teacher
+ * @route   GET /api/classes/my-schedule
+ * @access  Private (Teacher)
+ */
+export const getTeacherSchedule = async (req, res, next) => {
+   try {
+     // req.user should be populated by authentication middleware (e.g., verifyJWT)
+     const teacherId = req.user?.id;
+     console.log("Teacher ID:", teacherId);
+ 
+     // --- Enhanced Authentication Check ---
+     // Ensure the user object and ID are present from the token verification middleware
+     if (!teacherId) {
+         console.warn("[getTeacherSchedule] Unauthorized: No teacher ID found in req.user.");
+         // Use next() to pass the error to the central error handler
+         return next(new AppError('Not authorized, user ID not found in token', 401));
+     }
+ 
+     console.log(`[getTeacherSchedule] Fetching schedule for teacherId: ${teacherId}`);
+ 
+     // --- Database Query ---
+     // No try...catch needed here because asyncHandler wraps it
+     const classes = await Class.find({ teacherId: teacherId })
+                                .select('className schedule status') // Select only needed fields
+                                .sort({ createdAt: -1 }) // Optional: Sort by creation date or className
+                                .lean(); // Use .lean() for plain JS objects
+ 
+     // --- Response ---
+     // find() returns an empty array [] if no documents match, not null/undefined.
+     // It's standard REST practice to return 200 OK with an empty array in this case.
+     // No need for a specific 'not found' error here unless explicitly desired.
+     console.log(`[getTeacherSchedule] Found ${classes.length} classes for teacher ${teacherId}.`);
+ 
+     res.status(200).json({
+         success: true, // Add success flag for consistency
+         count: classes.length,
+         data: classes || [], // Ensure we always return an array, even if classes is null/undefined
+     });
+   } catch (error) {
+    
+    console.error("Error fetching teacher schedule:", error);
+    next(new AppError(error.message || "Failed to fetch teacher schedule", 500));
+   }
 };
