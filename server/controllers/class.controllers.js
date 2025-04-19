@@ -395,7 +395,7 @@ export const saveDailyAttendance = async (req, res, next) => {
     }
 
     return res.status(200).json({
-      success: true,
+        success: true,
       message: "Attendance saved successfully",
       active: !markCompleted // Return the current active state
     });
@@ -499,11 +499,11 @@ export const markStudentPresentByFrequency = asyncHandler(async (req, res) => {
     
     // Create the student attendance object with the required fields
     const studentAttendance = {
-      studentId: studentId,
+                studentId: studentId,
       status: 'present',
       recordedBy: classDoc.teacherId, // Teacher ID as the recorder
-      recordedAt: new Date()
-    };
+                recordedAt: new Date()
+            };
 
     // Check if this student already has an attendance record for this session
     const existingRecordIndex = attendanceRecord[sessionType].records.findIndex(
@@ -652,15 +652,15 @@ export const startAttendanceSession = asyncHandler(async (req, res) => {
     });
 
     return res.status(200).json({
-      success: true,
+            success: true,
       message: `${sessionType.charAt(0).toUpperCase() + sessionType.slice(1)} attendance session started`,
       sessionData: {
         sessionType,
         startedAt: new Date().toISOString()
       }
-    });
+        });
 
-  } catch (error) {
+    } catch (error) {
     console.error('Error starting attendance session:', error);
     return res.status(500).json({ 
       success: false,

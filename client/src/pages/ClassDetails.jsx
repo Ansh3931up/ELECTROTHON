@@ -1,21 +1,20 @@
 import React, { useEffect, useState } from "react";
+import { toast } from "react-hot-toast";
 // Icons for better visual cues
 import { FiBookOpen, FiChevronLeft, FiClock, FiCpu, FiEdit, FiPause, FiPlay, FiUsers, FiX } from 'react-icons/fi';
 import { useDispatch, useSelector } from "react-redux";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { toast } from "react-hot-toast";
 
+import { useTheme } from "../context/ThemeContext"; // Import theme context
 import { 
   clearAttendanceError, 
+  endAttendanceSession, 
   fetchClassDetails, 
   generatefrequency, 
   saveDailyAttendance, 
-  startAttendanceSession,
-  endAttendanceSession 
-} from "../redux/slices/classSlice";
+  startAttendanceSession} from "../redux/slices/classSlice";
 import { sendFrequencySMS, storeOfflineFrequency } from "../utils/offlineMode";
-import { useTheme } from "../context/ThemeContext"; // Import theme context
-import { getSocket, initializeSocket, joinClassRoom, leaveClassRoom, initiateAttendance, markAttendance, disconnectSocket, fetchAttendanceData } from "../utils/socket";
+import { fetchAttendanceData,getSocket, initializeSocket, initiateAttendance, joinClassRoom, leaveClassRoom } from "../utils/socket";
 
 const generateRandomFrequency = () => {
   // ... (Keep the function as it was)
@@ -100,8 +99,11 @@ const ClassDetails = () => {
   useEffect(() => {
     if (!currentClass) return;
 
+    console.log("Current class updated:", currentClass);
+
     // First check if there's an active session directly from the class
     if (currentClass.activeAttendanceSession?.isActive) {
+      console.log("Active session found:", currentClass.activeAttendanceSession);
       setCurrentSessionType(currentClass.activeAttendanceSession.sessionType);
       setIsMarkingMode(true);
       setIsSelectingType(false);
@@ -123,44 +125,87 @@ const ClassDetails = () => {
     const today = new Date().toISOString().split('T')[0];
     const todayRecord = currentClass.attendanceRecords?.find(record => {
       const recordDate = new Date(record.date).toISOString().split('T')[0];
-      return recordDate === today && record.active;
+      return recordDate === today;
     });
     
     if (todayRecord) {
-      // There's an active record for today, but we need to determine the session type
-      // Check if we're in the middle of lecture or lab
-      const hasLecture = todayRecord.lecture && todayRecord.lecture.length > 0;
-      const hasLab = todayRecord.lab && todayRecord.lab.length > 0;
+      console.log("Found today's attendance record:", todayRecord);
       
-      if (!hasLecture && !hasLab) {
-        // No attendance has been recorded yet, show session type selection
+      // Check for the new data structure with lecture/lab as objects containing records array
+      const hasLectureSession = todayRecord.lecture && 
+        ((todayRecord.lecture.records && todayRecord.lecture.records.length > 0) || 
+         (Array.isArray(todayRecord.lecture) && todayRecord.lecture.length > 0));
+      
+      const hasLabSession = todayRecord.lab && 
+        ((todayRecord.lab.records && todayRecord.lab.records.length > 0) || 
+         (Array.isArray(todayRecord.lab) && todayRecord.lab.length > 0));
+      
+      // Check for active sessions
+      const isLectureActive = todayRecord.lecture && 
+        (typeof todayRecord.lecture === 'object' ? todayRecord.lecture.active : false);
+      
+      const isLabActive = todayRecord.lab && 
+        (typeof todayRecord.lab === 'object' ? todayRecord.lab.active : false);
+      
+      console.log("Session status - Lecture:", {hasRecords: hasLectureSession, isActive: isLectureActive});
+      console.log("Session status - Lab:", {hasRecords: hasLabSession, isActive: isLabActive});
+      
+      if (isLectureActive || isLabActive) {
+        // We have an active session, show the attendance UI
+        const activeType = isLectureActive ? 'lecture' : 'lab';
+        console.log(`Active ${activeType} session found, showing attendance UI`);
+        
+        setCurrentSessionType(activeType);
+        setIsMarkingMode(true);
+        setIsSelectingType(false);
+        
+        // Initialize attendance for the active session
+        if (currentClass.studentList) {
+          const initialAttendance = {};
+          currentClass.studentList.forEach(student => {
+            initialAttendance[student._id] = "absent";
+          });
+          
+          // Try to populate with existing records if any
+          const sessionRecords = todayRecord[activeType].records || todayRecord[activeType] || [];
+          sessionRecords.forEach(record => {
+            if (record.studentId) {
+              const studentId = typeof record.studentId === 'object' ? record.studentId._id : record.studentId;
+              initialAttendance[studentId] = record.status;
+            }
+          });
+          
+          setCurrentDailyAttendance(initialAttendance);
+          sortStudentList(currentClass.studentList, initialAttendance);
+        }
+      } else if (!hasLectureSession && !hasLabSession) {
+        // No sessions recorded yet, but we have a record for today - show type selection
+        console.log("No sessions recorded yet, showing type selection");
         setIsSelectingType(true);
-        setIsMarkingMode(false);
-        setCurrentSessionType(null);
-      } else if (hasLecture && !hasLab) {
-        // Lecture has been recorded but lab hasn't
+      setIsMarkingMode(false);
+      setCurrentSessionType(null);
+      } else if (hasLectureSession && !hasLabSession) {
+        // Lecture has been recorded but lab hasn't, offer to do lab
+        console.log("Lecture recorded but lab not recorded, offering lab attendance");
         setCurrentSessionType('lab');
-        setIsMarkingMode(true);
-        setIsSelectingType(false);
-        
-        // Initialize lab attendance
-        initializeAttendanceForSession('lab', todayRecord);
-      } else if (!hasLecture && hasLab) {
-        // Lab has been recorded but lecture hasn't
+        setIsMarkingMode(false);
+        setIsSelectingType(true);
+      } else if (!hasLectureSession && hasLabSession) {
+        // Lab has been recorded but lecture hasn't, offer to do lecture
+        console.log("Lab recorded but lecture not recorded, offering lecture attendance");
         setCurrentSessionType('lecture');
-        setIsMarkingMode(true);
-        setIsSelectingType(false);
-        
-        // Initialize lecture attendance
-        initializeAttendanceForSession('lecture', todayRecord);
+        setIsMarkingMode(false);
+        setIsSelectingType(true);
       } else {
         // Both have been recorded, show initial state
+        console.log("Both lecture and lab have been recorded, showing initial state");
         setIsMarkingMode(false);
         setIsSelectingType(false);
         setCurrentSessionType(null);
       }
     } else {
-      // No active record for today, show initial state
+      // No record for today, show initial state
+      console.log("No attendance record found for today, showing initial state");
       setIsMarkingMode(false);
       setIsSelectingType(false);
       setCurrentSessionType(null);
@@ -243,7 +288,7 @@ const ClassDetails = () => {
         }));
         
         // Re-sort the list with the updated data
-        if (currentClass?.studentList) {
+    if (currentClass?.studentList) {
           sortStudentList(currentClass.studentList, {
             ...currentDailyAttendance,
             [studentId]: status
@@ -281,29 +326,48 @@ const ClassDetails = () => {
 
   // Step 2: Select session type and start the attendance session
   const handleSelectSessionType = (type) => {
-    if (!currentClass?._id) return;
+    if (!currentClass?._id) {
+      toast.error("Class information not loaded. Please refresh the page.");
+      return;
+    }
+    
+    console.log(`Session type selected: ${type}`);
     setCurrentSessionType(type);
     
     // Check if there's already attendance recorded for this date and type
     const today = new Date().toISOString().split('T')[0];
     
+    // Show a loading toast
+    const loadingToastId = toast.loading("Starting attendance session...");
+    
     fetchAttendanceData(currentClass._id, today, type)
       .then((data) => {
+        toast.dismiss(loadingToastId);
+        
         if (data.attendanceRecords && data.attendanceRecords.length > 0) {
           toast.info(`${type.charAt(0).toUpperCase() + type.slice(1)} attendance records already exist for today`);
           
           // Format the data for the UI
-          const existingAttendance = data.attendanceRecords.map(record => ({
-            studentId: record.studentId._id,
-            studentName: `${record.studentId.firstName} ${record.studentId.lastName}`,
-            status: record.status,
-            _id: record._id
-          }));
+          const existingAttendance = {};
+          data.attendanceRecords.forEach(record => {
+            if (record.studentId && record.studentId._id) {
+              existingAttendance[record.studentId._id] = record.status;
+            }
+          });
           
           setCurrentDailyAttendance(existingAttendance);
-          sortStudentList(existingAttendance);
+          if (currentClass.studentList) {
+            sortStudentList(currentClass.studentList, existingAttendance);
+          }
+          
+          // Explicitly set UI to marking mode
+          setIsMarkingMode(true);
+          setIsSelectingType(false);
+          
+          console.log("Showing existing attendance records with UI in marking mode");
         } else {
           // If no existing records, start a new attendance session
+          console.log("No existing records found, starting new attendance session");
           dispatch(startAttendanceSession({ 
             classId: currentClass._id, 
             sessionType: type 
@@ -311,18 +375,37 @@ const ClassDetails = () => {
             .unwrap()
             .then(() => {
               // Session started successfully
+              console.log("Attendance session started successfully");
               dispatch(fetchClassDetails(id));
-              setCurrentDailyAttendance([]);
-              sortStudentList([]);
+              
+              // Initialize empty attendance for all students
+              if (currentClass.studentList) {
+      const initialAttendance = {};
+      currentClass.studentList.forEach(student => {
+        initialAttendance[student._id] = "absent";
+      });
+      setCurrentDailyAttendance(initialAttendance);
+                sortStudentList(currentClass.studentList, initialAttendance);
+              }
+              
+              // Explicitly transition UI to marking mode
+      setIsMarkingMode(true);
+              setIsSelectingType(false);
+              
+              toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} attendance session started`);
             })
             .catch(error => {
-              toast.error(`Failed to start attendance session: ${error}`);
+              console.error("Failed to start attendance session:", error);
+              toast.error(`Failed to start attendance session: ${error.message || "Unknown error"}`);
               setIsSelectingType(false);
             });
         }
       })
       .catch(error => {
+        toast.dismiss(loadingToastId);
         console.error("Error checking existing attendance:", error);
+        toast.error("Error checking attendance records. Trying direct method...");
+        
         // Fall back to the original behavior if there's an error checking attendance
         dispatch(startAttendanceSession({ 
           classId: currentClass._id, 
@@ -330,10 +413,28 @@ const ClassDetails = () => {
         }))
           .unwrap()
           .then(() => {
+            console.log("Direct attendance session started successfully");
             dispatch(fetchClassDetails(id));
+            
+            // Initialize empty attendance for all students
+            if (currentClass.studentList) {
+              const initialAttendance = {};
+              currentClass.studentList.forEach(student => {
+                initialAttendance[student._id] = "absent";
+              });
+              setCurrentDailyAttendance(initialAttendance);
+       sortStudentList(currentClass.studentList, initialAttendance);
+    }
+            
+            // Explicitly transition UI to marking mode
+            setIsMarkingMode(true);
+            setIsSelectingType(false);
+            
+            toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} attendance session started`);
           })
           .catch(error => {
-            toast.error(`Failed to start attendance session: ${error}`);
+            console.error("Failed to start attendance session (fallback):", error);
+            toast.error(`Failed to start attendance session: ${error.message || "Unknown error"}`);
             setIsSelectingType(false);
           });
       });
@@ -359,10 +460,10 @@ const ClassDetails = () => {
         .unwrap()
         .then(() => {
           // Session ended successfully, reset UI state
-          setIsMarkingMode(false);
-          setIsSelectingType(false);
-          setCurrentSessionType(null);
-          setCurrentDailyAttendance({});
+    setIsMarkingMode(false);
+    setIsSelectingType(false);
+    setCurrentSessionType(null);
+    setCurrentDailyAttendance({});
           // Refresh class details
           dispatch(fetchClassDetails(id));
         })
@@ -400,7 +501,7 @@ const ClassDetails = () => {
 
   // Updated to consider active session
   const handleGenerateFrequency = async () => {
-    if (!currentClass?._id || !hasActiveSession) return;
+    if (!currentClass?._id) return;
     const currentClassId = currentClass._id;
 
     // Prevent multiple frequency generations in quick succession
@@ -409,15 +510,19 @@ const ClassDetails = () => {
       setDisabledButtons(prev => ({ ...prev, [currentClassId]: false }));
     }, 5000);
 
-    // Generate a new random frequency
+    try {
+      // Generate a new random frequency
     const newFrequency = await generateRandomFrequency();
+      console.log("Generated frequency:", newFrequency);
     
     if (isOffline) {
       setShowSMSForm(true);
       setClassFrequencies(prev => ({ ...prev, [currentClassId]: newFrequency }));
       storeOfflineFrequency(newFrequency);
     } else {
-      try {
+        // Show loading toast
+        const loadingToastId = toast.loading("Generating frequency...");
+        
         // Save the frequency to the backend
       const result = await dispatch(generatefrequency({ 
         classId: currentClassId, 
@@ -426,21 +531,26 @@ const ClassDetails = () => {
           autoActivate: true // Flag to activate the frequency immediately
       }));
         
+        toast.dismiss(loadingToastId);
+          
       if (generatefrequency.fulfilled.match(result)) {
           // Update local state with the saved frequency
-        setClassFrequencies(prev => ({ ...prev, [currentClassId]: result.payload }));
+          setClassFrequencies(prev => ({ ...prev, [currentClassId]: newFrequency }));
         setShowFrequencyPopup(true);
-          
-          // Emit socket event to notify students - now includes session type
-          initiateAttendance(currentClassId, newFrequency, user.user._id, activeSessionType);
-          
+            
+          // Emit socket event to notify students - use current session type
+          const sessionTypeToUse = currentSessionType || 'lecture'; // Default to lecture if no type set
+          initiateAttendance(currentClassId, newFrequency, user.user._id, sessionTypeToUse);
+            
           // Show success message
-          alert(`Frequency generated and sent to ${currentClass?.studentList?.length || 0} students. Students will be prompted to automatically mark attendance for ${activeSessionType}.`);
+          toast.success(`Frequency generated and sent to ${currentClass?.studentList?.length || 0} students.`);
+        } else {
+          toast.error("Failed to generate frequency: " + (result.payload || "Unknown error"));
         }
-      } catch (error) {
-        console.error("Error generating frequency:", error);
-        alert("Failed to generate frequency. Please try again.");
       }
+    } catch (error) {
+      console.error("Error generating frequency:", error);
+      toast.error("Failed to generate frequency. Please try again.");
     }
   };
 

@@ -220,19 +220,30 @@ export const markStudentPresentByFrequency = createAsyncThunk(
 export const startAttendanceSession = createAsyncThunk(
   "class/startAttendanceSession",
   // Expects { classId, sessionType }
-  async (sessionData, { rejectWithValue }) => {
+  async ({ classId, sessionType }, { rejectWithValue }) => {
     try {
       const token = localStorage.getItem("token");
-      const response = await axios.post(`${API_URL}/attendance/start-session`, sessionData, {
+      const response = await axios.post(`${API_URL}/attendance/start-session`, {
+        classId,
+        sessionType
+      }, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
       });
+      
       return response.data;
     } catch (error) {
-      const message = error.response?.data?.message || error.message || error.toString();
-      return rejectWithValue(message);
+      console.error("Error starting attendance session:", error);
+      
+      // Extract the error message to provide more helpful feedback
+      const errorMessage = error.response?.data?.message || 
+                          error.response?.data?.error || 
+                          error.message || 
+                          'Unknown error starting attendance session';
+                          
+      return rejectWithValue(errorMessage);
     }
   }
 );

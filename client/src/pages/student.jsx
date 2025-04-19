@@ -7,22 +7,63 @@ import BottomNavBar from '../components/BottomNavBar';
 import OfflineToggle from "../components/OfflineToggle";
 import { useTheme } from '../context/ThemeContext';
 import detectSound from "../helpers/detectSound";
-import { getfrequencyByClassId,getStudentClasses, markStudentPresentByFrequency } from "../redux/slices/classSlice";
+import { getfrequencyByClassId, getStudentClasses, markStudentPresentByFrequency } from "../redux/slices/classSlice";
 import { checkAndRequestPermissions, checkDeviceCapabilities } from '../utils/permissions';
 import { smsReceiver } from "../utils/smsReceiver";
 import { getSocket, initializeSocket, joinClassRoom, leaveClassRoom, markAttendance } from "../utils/socket";
 
-// Format schedule array into readable string
-const formatSchedule = (schedule) => {
-  if (!schedule || !Array.isArray(schedule) || schedule.length === 0) {
-    return 'No schedule available';
+// Sound helpers for audio feedback
+const playNotificationSound = () => {
+  try {
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(880, audioContext.currentTime); // A5 note
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    // Quick beep with fade out
+    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+    
+    oscillator.start();
+    setTimeout(() => {
+      oscillator.stop();
+      setTimeout(() => audioContext.close(), 100);
+    }, 500);
+  } catch (error) {
+    console.error("Error playing notification sound:", error);
   }
-  
-  return schedule.map(slot => {
-    const day = slot.day;
-    const times = Array.isArray(slot.timing) ? slot.timing.join(', ') : slot.timing;
-    return `${day}: ${times}`;
-  }).join(' • ');
+};
+
+// Success sound - plays a pleasant ascending tone
+const playSuccessSound = () => {
+  try {
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(440, audioContext.currentTime); // A4
+    oscillator.frequency.exponentialRampToValueAtTime(880, audioContext.currentTime + 0.5); // A5
+    
+    gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+    gainNode.gain.linearRampToValueAtTime(0.5, audioContext.currentTime + 0.1);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 1);
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    oscillator.start();
+    setTimeout(() => {
+      oscillator.stop();
+      setTimeout(() => audioContext.close(), 100);
+    }, 1000);
+  } catch (error) {
+    console.error("Error playing success sound:", error);
+  }
 };
 
 // Get a simplified schedule display (just the first slot's day and time)
@@ -53,13 +94,24 @@ const getGradientClass = (index) => {
   return gradients[index % gradients.length];
 };
 
+// Simple loading spinner
+const LoadingSpinner = () => (
+  <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+  </svg>
+);
+
+// Track current detection session to handle cleanup
+let currentDetectionCleanup = null;
+
 const Student = () => {
   const dispatch = useDispatch();
   const { isDarkMode } = useTheme();
   const user = useSelector((state) => state.auth.user);
   const { classes, loading: classLoading, error: classError } = useSelector((state) => state.class);
-  console.log("classes", classes);
-  const [status, setStatus] = useState("Select a class to check frequency");
+  
+  const [status, setStatus] = useState("Waiting for attendance notifications...");
   const [selectedClassId, setSelectedClassId] = useState(null);
   const [classFrequencies, setClassFrequencies] = useState({});
   const [hasPermissions, setHasPermissions] = useState(false);
@@ -75,6 +127,14 @@ const Student = () => {
   });
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
+  const [canvasVisible, setCanvasVisible] = useState(false);
+
+  // Track detection state and frequency
+  const [detectionState, setDetectionState] = useState({
+    active: false,
+    currentFrequency: null,
+    classId: null
+  });
 
   // State for real-time notifications
   const [notifications, setNotifications] = useState([]);
@@ -82,7 +142,6 @@ const Student = () => {
 
   useEffect(() => {
     if (user?.user?._id) {
-      console.log("Dispatching getStudentClasses with ID:", user.user._id);
       dispatch(getStudentClasses(user.user._id));
       
       // Initialize socket connection
@@ -105,38 +164,44 @@ const Student = () => {
         socket.off('connect');
         socket.off('disconnect');
       }
+      // Also clean up any active detection
+      if (currentDetectionCleanup) {
+        currentDetectionCleanup();
+        currentDetectionCleanup = null;
+      }
     };
   }, [dispatch, user?.user?._id]);
 
+  // Join all class rooms upon loading to always be ready for notifications
   useEffect(() => {
-    if (!isOffline && selectedClassId && !loadingStates.listening) {
-      const fetchFreqForSelected = () => {
-        setLoadingStates(prev => ({ ...prev, fetchFrequency: { ...prev.fetchFrequency, [selectedClassId]: true } }));
-        dispatch(getfrequencyByClassId(selectedClassId)).then((result) => {
-          if (getfrequencyByClassId.fulfilled.match(result)) {
-            setClassFrequencies((prev) => ({
-              ...prev,
-              [selectedClassId]: result.payload || [],
-            }));
-            if(result.payload && result.payload.length > 0){
-               setStatus("Frequency fetched. Ready to Mark Attendance.");
-            } else if (status.startsWith("Frequency fetched")) {
-                setStatus("No active frequency. Fetch or wait.")
-            }
-          } else {
-             setStatus("Error fetching frequency.");
-          }
-        }).finally(() => {
-           setLoadingStates(prev => ({ ...prev, fetchFrequency: { ...prev.fetchFrequency, [selectedClassId]: false } }));
+    if (user?.user?._id && classes && classes.length > 0) {
+      // Join all class rooms
+      classes.forEach(cls => {
+        joinClassRoom(cls._id, user.user._id);
+      });
+      
+      // Listen to socket events from any class
+      const socket = getSocket();
+      if (socket) {
+        // Handle attendance started event from any joined class
+        socket.on('attendanceStarted', (data) => {
+          handleAttendanceNotification(data);
         });
+      }
+      
+      return () => {
+        // Cleanup: leave all class rooms
+        const socket = getSocket();
+        if (socket) {
+          socket.off('attendanceStarted');
+          
+          classes.forEach(cls => {
+            leaveClassRoom(cls._id, user.user._id);
+          });
+        }
       };
-
-      fetchFreqForSelected();
-      const interval = setInterval(fetchFreqForSelected, 10000);
-
-      return () => clearInterval(interval);
     }
-  }, [dispatch, selectedClassId, isOffline, loadingStates.listening]);
+  }, [classes, user?.user?._id]);
 
   useEffect(() => {
     const setupPermissions = async () => {
@@ -148,12 +213,25 @@ const Student = () => {
         return;
       }
 
-      const granted = await checkAndRequestPermissions('student');
-      setHasPermissions(granted);
+      try {
+        // Request permissions with a small delay to ensure browser is ready
+        setTimeout(async () => {
+          const granted = await checkAndRequestPermissions('student');
+          setHasPermissions(granted);
+          
+          // Clear old status message if permissions were successful
+          if (granted && status.includes("missing permissions")) {
+            setStatus("Permissions granted! Waiting for attendance notifications...");
+          }
+        }, 500);
 
-      if (isOffline) {
-        const smsPermissionGranted = await smsReceiver.startListening();
-        setHasSMSPermissions(smsPermissionGranted);
+        if (isOffline) {
+          const smsPermissionGranted = await smsReceiver.startListening();
+          setHasSMSPermissions(smsPermissionGranted);
+        }
+      } catch (error) {
+        console.error("Error requesting permissions:", error);
+        setStatus("Error requesting permissions. Please use the Grant Permissions button.");
       }
     };
 
@@ -164,7 +242,7 @@ const Student = () => {
         smsReceiver.stopListening();
       }
     };
-  }, [isOffline]);
+  }, [isOffline, status]);
 
   useEffect(() => {
     if (isOffline && selectedClassId) {
@@ -174,7 +252,10 @@ const Student = () => {
             ...prev,
             [selectedClassId]: [result.frequency]
           }));
-          setStatus('Frequency received via SMS');
+          setStatus('Frequency received via SMS! Starting automatic detection...');
+          
+          // Auto-start detection from SMS too
+          startDetection(selectedClassId, [result.frequency]);
         } else {
           setStatus('Error processing SMS frequency: ' + result.error);
         }
@@ -184,71 +265,7 @@ const Student = () => {
     }
   }, [isOffline, selectedClassId]);
 
-  // Join class room when a class is selected
-  useEffect(() => {
-    if (selectedClassId && user?.user?._id) {
-      joinClassRoom(selectedClassId, user.user._id);
-      
-      // Setup socket event listeners
-      const socket = getSocket();
-      
-      socket.on('attendanceStarted', (data) => {
-        if (data.classId === selectedClassId) {
-          console.log("Received attendance notification:", data);
-          // Add notification
-          const classObj = classes?.find(cls => cls._id === data.classId);
-          setNotifications(prev => [
-            {
-              id: Date.now(),
-              type: 'attendance',
-              message: `Attendance started for ${classObj?.className || 'class'}`,
-              data,
-              timestamp: new Date().toISOString(),
-            },
-            ...prev.slice(0, 9) // Keep only the last 10 notifications
-          ]);
-          
-          // Automatically update frequency
-          setClassFrequencies(prev => ({
-            ...prev,
-            [selectedClassId]: data.frequency
-          }));
-          
-          setStatus("Attendance started! Ready to mark your presence.");
-          
-          // Play notification sound
-          const audio = new Audio('/notification.mp3');
-          audio.play().catch(e => console.log("Error playing sound", e));
-          
-          // Auto-start frequency detection if requested by teacher
-          if (data.autoDetect && hasPermissions && 
-              deviceCapabilities.hasMicrophone && deviceCapabilities.hasCamera) {
-            // Show a prominent notification to the user
-            if ('Notification' in window && Notification.permission === 'granted') {
-              new Notification(`Attendance Check: ${classObj?.className || 'Your class'}`, {
-                body: 'Automatic attendance verification starting...',
-                icon: '/favicon.ico'
-              });
-            }
-            
-            // Small delay before starting detection
-            setTimeout(() => {
-              handleStartListening(selectedClassId);
-            }, 1500);
-          }
-        }
-      });
-      
-      // Cleanup when selected class changes
-      return () => {
-        if (selectedClassId) {
-          leaveClassRoom(selectedClassId, user.user._id);
-        }
-        socket.off('attendanceStarted');
-      };
-    }
-  }, [selectedClassId, user?.user?._id, classes, hasPermissions, deviceCapabilities]);
-
+  // Handle offline mode toggle
   const handleOfflineModeChange = async (offline) => {
     setIsOffline(offline);
     if (offline) {
@@ -257,96 +274,134 @@ const Student = () => {
       setStatus('Waiting for frequency via SMS...');
     } else {
       smsReceiver.stopListening();
-      setStatus('Select a class to check frequency');
+      setStatus('Waiting for attendance notifications...');
     }
   };
 
-  const LoadingSpinner = ({ className = "text-white" }) => (
-    <svg className={`animate-spin h-5 w-5 ${className}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-    </svg>
-  );
-
-  // Add manual function to fetch frequency for a specific class
-  const handleManualFetchFrequency = (classId, e) => {
-    e.stopPropagation(); // Prevent card selection
-    setSelectedClassId(classId);
-    setStatus("Fetching frequency...");
+  // Handle attendance notification from socket
+  const handleAttendanceNotification = (data) => {
+    console.log("Received attendance notification:", data);
     
-    setLoadingStates(prev => ({ ...prev, fetchFrequency: { ...prev.fetchFrequency, [classId]: true } }));
-    dispatch(getfrequencyByClassId(classId)).then((result) => {
-      if (getfrequencyByClassId.fulfilled.match(result)) {
-        setClassFrequencies((prev) => ({
-          ...prev,
-          [classId]: result.payload || [],
-        }));
-        if(result.payload && result.payload.length > 0){
-          setStatus("Frequency fetched. Ready to Mark Attendance.");
-        } else {
-          setStatus("No active frequency available for this class.");
-        }
-      } else {
-        setStatus("Error fetching frequency.");
-      }
-    }).finally(() => {
-      setLoadingStates(prev => ({ ...prev, fetchFrequency: { ...prev.fetchFrequency, [classId]: false } }));
+    // Find the class that this notification is for
+    const classObj = classes?.find(cls => cls._id === data.classId);
+    if (!classObj) return;
+    
+    // Add to notifications list
+    setNotifications(prev => [
+      {
+        id: Date.now(),
+        type: 'attendance',
+        message: `Attendance started for ${classObj?.className || 'class'}`,
+        data,
+        timestamp: new Date().toISOString(),
+      },
+      ...prev.slice(0, 9) // Keep only the last 10 notifications
+    ]);
+    
+    // Automatically select this class
+    setSelectedClassId(data.classId);
+    
+    // Update stored frequency
+    setClassFrequencies(prev => ({
+      ...prev,
+      [data.classId]: data.frequency
+    }));
+    
+    // Play notification sound
+    playNotificationSound();
+    
+    // Show a prominent notification
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification(`Attendance Check: ${classObj?.className || 'Your class'}`, {
+        body: 'Automatically detecting attendance frequency...',
+        icon: '/favicon.ico',
+        vibrate: [200, 100, 200]
+      });
+    }
+    
+    // Auto-start detection if we have permissions
+    if (hasPermissions && deviceCapabilities.hasMicrophone && deviceCapabilities.hasCamera) {
+      // Update status
+      setStatus(`Starting automatic attendance detection for ${classObj.className}...`);
+      
+      // Start detection with a small delay to allow UI to update
+      setTimeout(() => {
+        startDetection(data.classId, data.frequency, data.sessionType);
+      }, 1000);
+    } else {
+      setStatus("Cannot start automatic detection - missing permissions");
+    }
+  };
+
+  // Start detection automatically
+  const startDetection = async (classId, frequency, sessionType = 'lecture') => {
+    if (!classId || !frequency || !frequency.length || !hasPermissions) {
+      setStatus("Cannot start detection - missing data or permissions");
+      return;
+    }
+    
+    // If already detecting for this class with the same frequency, don't restart
+    if (
+      detectionState.active && 
+      detectionState.classId === classId && 
+      JSON.stringify(detectionState.currentFrequency) === JSON.stringify(frequency)
+    ) {
+      return;
+    }
+    
+    // Stop previous detection if it exists
+    if (currentDetectionCleanup) {
+      console.log("Stopping previous detection...");
+      currentDetectionCleanup();
+      currentDetectionCleanup = null;
+      
+      // Small delay before starting new detection
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    
+    // Find class details
+    const classObj = classes.find(c => c._id === classId);
+    if (!classObj) {
+      setStatus("Class not found. Cannot start detection.");
+      return;
+    }
+    
+    // Use the active session type or fallback to provided or default
+    const activeSessionType = classObj.activeAttendanceSession?.sessionType || sessionType;
+    
+    // Update detection state
+    setDetectionState({
+      active: true,
+      currentFrequency: frequency,
+      classId
     });
-  };
-
-  const handleStartListening = async (classId) => {
-    if (!hasPermissions) {
-      setStatus("Microphone/Camera permissions needed.");
-      return;
-    }
     
-    if (!classId) {
-      setStatus("Please select a class first");
-      return;
-    }
-    
-    if (!classFrequencies[classId] || classFrequencies[classId].length === 0) {
-      setStatus("No frequency available for this class.");
-      return;
-    }
-    
-    if (!user?.user?._id) {
-      setStatus("User information not available.");
-      return;
-    }
-    
-    // Check if there's an active attendance session for this class
-    const selectedClass = classes.find(c => c._id === classId);
-    if (!selectedClass) {
-      setStatus("Class not found");
-      return;
-    }
-    
-    // Get the active session type if available
-    const isActiveSession = selectedClass.activeAttendanceSession?.isActive || false;
-    const activeSessionType = selectedClass.activeAttendanceSession?.sessionType || 'lecture';
-    
-    if (!isActiveSession) {
-      setStatus("No active attendance session for this class. Wait for teacher to start attendance.");
-      return;
-    }
-    
-    setStatus(`Starting detection for ${activeSessionType} attendance...`);
+    // Update UI
+    setStatus(`Listening for frequency ${frequency.join(', ')} Hz...`);
     setLoadingStates(prev => ({ ...prev, listening: true }));
-    setSelectedClassId(classId);
+    setCanvasVisible(true);
+    
+    console.log(`Starting detection for class ${classId} with frequency ${frequency}`);
     
     try {
-      const storedFrequency = classFrequencies[classId];
-      console.log("Using stored frequency for detection:", storedFrequency);
-
-      await detectSound(
+      // Use detectSound to listen for the frequency
+      const cleanupFn = await detectSound(
         setStatus,
-        storedFrequency,
+        frequency,
         async (isDetected, detectedFreqValue) => {
+          // Update state when detection completes
+          setDetectionState(prev => ({ ...prev, active: false }));
           setLoadingStates(prev => ({ ...prev, listening: false }));
-
+          
           if (isDetected) {
-            setStatus("Frequency detected! Marking attendance...");
+            // Play success sound
+            playSuccessSound();
+            
+            // Update UI
+            setStatus("✅ Frequency detected! Marking attendance...");
+            
+            // Keep canvas visible for a moment to see final detection
+            setTimeout(() => setCanvasVisible(false), 3000);
             
             // Emit socket event for real-time update with the correct session type
             const marked = markAttendance(
@@ -354,55 +409,83 @@ const Student = () => {
               user.user._id, 
               user.user.fullName || user.user.email,
               'present',
-              activeSessionType // Use the active session type
+              activeSessionType
             );
             
             if (!marked) {
-              setStatus("Failed to emit real-time attendance update. Will still try to record via API.");
+              setStatus("Real-time update failed. Trying API...");
             }
             
             // Also save via API
-            dispatch(markStudentPresentByFrequency({
-              classId: classId,
-              studentId: user.user._id,
-              detectedFrequency: detectedFreqValue || storedFrequency[0],
-              sessionType: activeSessionType // Include session type in API call
-            }))
-            .unwrap()
-            .then(result => {
-              setStatus(`Attendance for ${activeSessionType} marked successfully! ✅`);
-              console.log("Marking success:", result);
-            })
-            .catch(err => {
-              setStatus(`Failed to mark attendance: ${err || 'Unknown error'}`);
-              console.error("Marking error:", err);
-            });
+            try {
+              const result = await dispatch(markStudentPresentByFrequency({
+                classId: classId,
+                studentId: user.user._id,
+                detectedFrequency: detectedFreqValue || frequency[0],
+                sessionType: activeSessionType
+              })).unwrap();
+              
+              // Update UI with final status
+              setStatus(`✅ Attendance marked successfully for ${activeSessionType}!`);
+              console.log("Attendance marking success:", result);
+              
+              // Send system notification
+              if ('Notification' in window && Notification.permission === 'granted') {
+                new Notification('Attendance Confirmed ✓', {
+                  body: `You've been marked present for ${classObj?.className || 'class'}`,
+                  icon: '/favicon.ico'
+                });
+              }
+            } catch (err) {
+              setStatus(`⚠️ Failed to mark attendance: ${err || 'Unknown error'}`);
+              console.error("Attendance marking error:", err);
+            }
           } else {
-            setStatus("Frequency detection failed. Please ensure you are in the right place.");
+            setStatus("Frequency detection failed. Will retry automatically.");
+            setCanvasVisible(false);
+            
+            // Retry after a short delay
+            setTimeout(() => {
+              if (classFrequencies[classId] && classFrequencies[classId].length > 0) {
+                startDetection(classId, classFrequencies[classId], activeSessionType);
+              }
+            }, 5000);
           }
         }
       );
-
+      
+      // Store cleanup function
+      currentDetectionCleanup = cleanupFn;
+      
     } catch (error) {
       console.error('Error starting frequency detection:', error);
-      setStatus("Error starting detection. Please try again.");
+      setStatus("Error starting detection. Will retry shortly...");
       setLoadingStates(prev => ({ ...prev, listening: false }));
+      setCanvasVisible(false);
+      setDetectionState(prev => ({ ...prev, active: false }));
+      
+      // Retry after delay
+      setTimeout(() => {
+        if (classFrequencies[classId] && classFrequencies[classId].length > 0) {
+          startDetection(classId, classFrequencies[classId], activeSessionType);
+        }
+      }, 5000);
     }
   };
 
   const getInfoBoxBg = (type) => {
-      switch(type){
-          case 'error': return isDarkMode ? 'bg-red-900/50 border-red-700 text-red-300' : 'bg-red-50 border-red-500 text-red-700';
-          case 'warning': return isDarkMode ? 'bg-yellow-900/50 border-yellow-600 text-yellow-300' : 'bg-yellow-50 border-yellow-500 text-yellow-700';
-          case 'info': return isDarkMode ? 'bg-blue-900/50 border-blue-700 text-blue-300' : 'bg-blue-50 border-blue-500 text-blue-700';
-          default: return isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-300' : 'bg-gray-50 border-gray-500 text-gray-700';
-      }
-  }
+    switch(type){
+      case 'error': return isDarkMode ? 'bg-red-900/50 border-red-700 text-red-300' : 'bg-red-50 border-red-500 text-red-700';
+      case 'warning': return isDarkMode ? 'bg-yellow-900/50 border-yellow-600 text-yellow-300' : 'bg-yellow-50 border-yellow-500 text-yellow-700';
+      case 'info': return isDarkMode ? 'bg-blue-900/50 border-blue-700 text-blue-300' : 'bg-blue-50 border-blue-500 text-blue-700';
+      default: return isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-300' : 'bg-gray-50 border-gray-500 text-gray-700';
+    }
+  };
 
   // Filter and search classes
   const filteredClasses = classes?.filter(cls => {
     const matchesSearch = cls.className.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          cls.classCode.toLowerCase().includes(searchQuery.toLowerCase());
+                        cls.classCode.toLowerCase().includes(searchQuery.toLowerCase());
     
     if (activeFilter === 'all') return matchesSearch;
     return cls.status === activeFilter && matchesSearch;
@@ -421,7 +504,38 @@ const Student = () => {
         {!hasPermissions && deviceCapabilities.hasMicrophone && deviceCapabilities.hasCamera && (
           <div className={`border-l-4 p-4 mb-4 rounded-r-md ${getInfoBoxBg('warning')}`}>
             <p className="font-bold flex items-center"><FiAlertTriangle className="mr-2"/> Permissions Required</p>
-            <p>Camera and microphone access is required for attendance.</p>
+            <p className="mb-2">Camera and microphone access is required for automatic attendance.</p>
+            <button 
+              onClick={async () => {
+                // Request permissions manually when the button is clicked
+                const granted = await checkAndRequestPermissions('student');
+                setHasPermissions(granted);
+                if (granted) {
+                  setStatus("Permissions granted! You can now use automatic attendance.");
+                  // If there's already an active class with frequency, try to start detection
+                  if (selectedClassId && classFrequencies[selectedClassId] && classFrequencies[selectedClassId].length > 0) {
+                    const classObj = classes.find(c => c._id === selectedClassId);
+                    if (classObj?.activeAttendanceSession?.isActive) {
+                      setTimeout(() => {
+                        startDetection(
+                          selectedClassId, 
+                          classFrequencies[selectedClassId],
+                          classObj.activeAttendanceSession.sessionType
+                        );
+                      }, 1000);
+                    }
+                  }
+                } else {
+                  setStatus("Could not get permissions. Please check your browser settings.");
+                }
+              }}
+              className={`mt-2 px-4 py-2 rounded-md bg-blue-500 hover:bg-blue-600 text-white font-medium transition-colors focus:ring-2 focus:ring-blue-400 focus:outline-none`}
+            >
+              Grant Permissions
+            </button>
+            <p className="mt-2 text-xs">
+              Note: Some browsers require clicking this button to show the permission dialog. If you previously denied permissions, you may need to reset them in your browser settings.
+            </p>
           </div>
         )}
 
@@ -501,17 +615,35 @@ const Student = () => {
         {isOffline && hasSMSPermissions && (
            <div className={`border-l-4 p-4 mb-4 rounded-r-md ${getInfoBoxBg('info')}`}>
              <p className="font-bold flex items-center"><FiWifiOff className="mr-2"/> Offline Mode Active</p>
-             <p>Waiting for frequency via SMS. Make sure you have selected a class.</p>
+             <p>Waiting for frequency via SMS. Attendance will be automatic when received.</p>
            </div>
         )}
 
-        <div className={`mb-6 p-4 rounded-lg ${isDarkMode ? 'bg-gray-800' : 'bg-white'} shadow-sm`}>
-          <p className={`text-lg font-semibold text-center ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>{status}</p>
+        {/* Status and Visualization Area */}
+        <div className={`mb-6 p-4 rounded-lg ${isDarkMode ? 'bg-gray-800' : 'bg-white'} shadow-md`}>
+          <div className="flex items-center justify-center mb-2">
+            {loadingStates.listening && (
+              <div className="mr-2 p-1 bg-green-500 rounded-full animate-pulse">
+                <div className="w-2 h-2 rounded-full bg-white"></div>
+              </div>
+            )}
+            <p className={`text-lg font-semibold text-center ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
+              {status}
+            </p>
+          </div>
+          
+          {/* Canvas for frequency visualization - show when needed */}
           <canvas
             id="frequencyData"
-            className={`w-full h-48 rounded-lg mt-2 ${isDarkMode ? 'bg-black' : 'bg-gray-900'}`}
-            style={{ display: loadingStates.listening ? 'block' : 'none' }}
+            className={`w-full h-48 rounded-lg mt-2 transition-opacity ${isDarkMode ? 'bg-black' : 'bg-gray-900'} ${canvasVisible ? 'opacity-100' : 'opacity-0 h-0 mt-0'}`}
           />
+          
+          {/* Help text for auto detection */}
+          {detectionState.active && (
+            <p className={`text-xs text-center mt-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+              Listening automatically. Keep your device nearby and speaker volume up.
+            </p>
+          )}
         </div>
 
         {classLoading && <p className={`text-center py-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Loading classes...</p>}
@@ -520,14 +652,38 @@ const Student = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {!classLoading && filteredClasses?.map((cls, index) => {
             const { day, time } = getSimpleSchedule(cls.schedule);
+            const isActiveAttendance = cls.activeAttendanceSession?.isActive;
+            const attendanceSessionType = cls.activeAttendanceSession?.sessionType;
+            const isSelected = selectedClassId === cls._id;
+            const isDetecting = detectionState.active && detectionState.classId === cls._id;
+            
             return (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: index * 0.05 }}
                 key={cls._id}
-                className={`relative overflow-hidden rounded-xl shadow-lg cursor-pointer ${selectedClassId === cls._id ? 'ring-2 ring-blue-500' : ''}`}
-                onClick={() => setSelectedClassId(cls._id)}
+                className={`relative overflow-hidden rounded-xl shadow-lg cursor-pointer ${isSelected ? 'ring-2 ring-blue-500' : ''}`}
+                onClick={() => {
+                  setSelectedClassId(cls._id);
+                  
+                  // When selecting a class, check if it has an active session to auto-start detection
+                  if (cls.activeAttendanceSession?.isActive && !detectionState.active) {
+                    setStatus(`Active ${cls.activeAttendanceSession.sessionType} session detected. Starting automatic detection...`);
+                    
+                    // Fetch latest frequency
+                    dispatch(getfrequencyByClassId(cls._id)).then((result) => {
+                      if (getfrequencyByClassId.fulfilled.match(result) && result.payload && result.payload.length > 0) {
+                        // Auto-start detection
+                        startDetection(cls._id, result.payload, cls.activeAttendanceSession.sessionType);
+                      } else {
+                        setStatus("No active frequency available. Waiting for teacher to start attendance.");
+                      }
+                    });
+                  } else if (!detectionState.active) {
+                    setStatus("Waiting for attendance to start...");
+                  }
+                }}
               >
                 {/* Card Content */}
                 <div className={`p-5 bg-gradient-to-br ${getGradientClass(index)} text-white h-full`}>
@@ -543,8 +699,24 @@ const Student = () => {
                     <div>{time}</div>
                   </div>
 
+                  {/* Attendance Status Indicator */}
+                  {isActiveAttendance && (
+                    <div className="mt-2 px-3 py-1.5 rounded-full bg-white/30 backdrop-blur-sm text-xs font-medium inline-flex items-center">
+                      <span className="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></span>
+                      Active {attendanceSessionType} session
+                    </div>
+                  )}
+                  
+                  {/* Detection Status */}
+                  {isDetecting && (
+                    <div className="mt-2 px-3 py-1.5 rounded-full bg-blue-500/50 backdrop-blur-sm text-xs font-medium inline-flex items-center">
+                      <LoadingSpinner />
+                      <span className="ml-2">Detecting frequency...</span>
+                    </div>
+                  )}
+
                   {/* Frequency Display */}
-                  {classFrequencies[cls._id] && classFrequencies[cls._id].length > 0 && selectedClassId === cls._id && (
+                  {classFrequencies[cls._id] && classFrequencies[cls._id].length > 0 && isSelected && (
                     <div className="my-3 px-3 py-2 rounded bg-white/20 backdrop-blur-sm">
                       <p className="text-xs font-medium mb-1">Active Frequency:</p>
                       <div className="flex flex-wrap gap-2">
@@ -555,69 +727,43 @@ const Student = () => {
                     </div>
                   )}
 
-                  {/* Action Buttons */}
-                  <div className="mt-4 space-y-2">
-                    {/* Get Frequency Button */}
-                    <button
-                      onClick={(e) => handleManualFetchFrequency(cls._id, e)}
-                      disabled={loadingStates.fetchFrequency?.[cls._id]}
-                      className={`w-full relative flex items-center justify-center px-4 py-2 rounded-lg transition-all duration-300 text-white font-medium text-sm ${
-                        loadingStates.fetchFrequency?.[cls._id]
-                          ? 'cursor-not-allowed bg-black/30'
-                          : 'hover:bg-white/20 bg-white/10 backdrop-blur-sm'
-                      }`}
-                    >
-                      {loadingStates.fetchFrequency?.[cls._id] ? (
-                        <div className="flex items-center space-x-2">
-                          <LoadingSpinner />
-                          <span>Getting Frequency...</span>
-                        </div>
-                      ) : (
-                        "Get Frequency"
-                      )}
-                    </button>
-                    
-                    {/* Mark Attendance Button */}
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleStartListening(cls._id); }}
-                      disabled={!classFrequencies[cls._id] || classFrequencies[cls._id].length === 0 || loadingStates.listening || !hasPermissions}
-                      className={`w-full relative flex items-center justify-center px-4 py-2 rounded-lg transition-all duration-300 text-white font-medium text-sm ${
-                        (!classFrequencies[cls._id] || classFrequencies[cls._id].length === 0 || !hasPermissions)
-                          ? 'cursor-not-allowed bg-black/30'
-                          : loadingStates.listening && selectedClassId === cls._id
-                          ? 'cursor-not-allowed bg-black/50'
-                          : 'hover:bg-white/30 bg-white/20 backdrop-blur-sm'
-                      }`}
-                    >
-                      {loadingStates.listening && selectedClassId === cls._id ? (
-                        <div className="flex items-center space-x-2">
-                          <LoadingSpinner />
-                          <span>Listening...</span>
-                        </div>
-                      ) : (
-                        !hasPermissions ? 'Permissions Needed' : "Mark Attendance"
-                      )}
-                    </button>
+                  {/* Status Message */}
+                  <div className="mt-4 text-center">
+                    <div className="text-xs text-white/80 p-2">
+                      {isActiveAttendance
+                        ? isDetecting 
+                          ? "Automatic detection in progress..."
+                          : "Ready for automatic attendance"
+                        : "Waiting for teacher to start attendance..."}
+                    </div>
                   </div>
                 </div>
               </motion.div>
             );
           })}
         </div>
+        
         {!classLoading && (!filteredClasses || filteredClasses.length === 0) && (
-             <p className={`text-center py-8 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-               {searchQuery ? 'No classes match your search.' : 'You are not enrolled in any classes.'}
-             </p>
-         )}
+          <p className={`text-center py-8 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+            {searchQuery ? 'No classes match your search.' : 'You are not enrolled in any classes.'}
+          </p>
+        )}
 
         {/* Socket connection indicator */}
         {socketConnected ? (
-          <div className={`fixed right-4 bottom-24 p-1 rounded-full ${isDarkMode ? 'bg-green-800' : 'bg-green-500'}`}>
+          <div className={`fixed right-4 bottom-24 p-1 rounded-full ${isDarkMode ? 'bg-green-800' : 'bg-green-500'}`} title="Connected to server">
             <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
           </div>
         ) : (
-          <div className={`fixed right-4 bottom-24 p-1 rounded-full ${isDarkMode ? 'bg-red-800' : 'bg-red-500'}`}>
+          <div className={`fixed right-4 bottom-24 p-1 rounded-full ${isDarkMode ? 'bg-red-800' : 'bg-red-500'}`} title="Disconnected from server">
             <div className="w-2 h-2 rounded-full bg-red-400" />
+          </div>
+        )}
+        
+        {/* Active detection indicator */}
+        {detectionState.active && (
+          <div className={`fixed left-4 bottom-24 p-1 rounded-full animate-pulse bg-blue-500`} title="Actively detecting frequency">
+            <div className="w-2 h-2 rounded-full bg-blue-200" />
           </div>
         )}
         
