@@ -44,9 +44,22 @@ const dailyAttendanceSchema = new mongoose.Schema({
         required: true,
         unique: false // Not unique on its own, needs class context
     },
-    lecture: [studentAttendanceStatusSchema], // Attendance list for lecture
-    lab: [studentAttendanceStatusSchema] // Attendance list for lab
+    lecture: {
+        records: [studentAttendanceStatusSchema], // Attendance list for lecture
+        active: {
+            type: Boolean,
+            default: true // Active by default when created
+        }
+    },
+    lab: {
+        records: [studentAttendanceStatusSchema], // Attendance list for lab
+        active: {
+            type: Boolean,
+            default: true // Active by default when created
+        }
+    }
 }, { _id: true }); // Give daily records their own _id
+
 
 const classSchema = new mongoose.Schema({
     className: {
@@ -103,7 +116,8 @@ const classSchema = new mongoose.Schema({
         required: true,
         enum: ['active', 'inactive', 'archived'],
         default: 'active'
-    }
+    },
+    
 }, { timestamps: true });
 
 classSchema.index({ classCode: 1 });

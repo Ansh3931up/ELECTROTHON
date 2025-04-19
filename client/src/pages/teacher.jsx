@@ -189,21 +189,21 @@ const Teacher = () => {
         {/* Class Grid - 2 Columns, Updated Card Style */}
         {!loading && (
           <div className="grid grid-cols-2 gap-5"> {/* Fixed 2 columns, adjusted gap */}
-            {filteredClasses.length > 0 ? (
-              filteredClasses.map((cls, index) => {
-                const palette = palettes[index % palettes.length];
+          {filteredClasses.length > 0 ? (
+            filteredClasses.map((cls, index) => {
+              const palette = palettes[index % palettes.length];
                 const statusColor = getStatusColor(cls.status);
                 const studentCount = cls.studentList?.length || 0;
                 const displaySchedule = formatSchedule(cls.schedule);
                 const displayBatch = cls.batch || ''; // Empty string if N/A
 
-                return (
-                  <div
-                    key={cls._id}
+              return (
+                <div
+                  key={cls._id}
                     // Main Card Styling - gradient uses updated palette
                     className={`relative group bg-gradient-to-br ${palette.gradient} rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer overflow-hidden aspect-[3/2] flex flex-col justify-between p-5 ${palette.text}`}
-                    onClick={() => handleClassClick(cls)}
-                  >
+                  onClick={() => handleClassClick(cls)}
+                >
                     {/* Abstract Shapes - Slightly reduced opacity */}
                     <div className={`absolute -bottom-1/4 -right-1/4 w-2/3 h-2/3 rounded-full ${palette.highlight} opacity-40 blur-lg group-hover:opacity-50 transition-opacity duration-400`}></div>
                     <div className={`absolute -top-10 -left-10 w-1/2 h-1/2 rounded-full ${palette.highlight} opacity-30 blur-md`}></div>
@@ -215,7 +215,7 @@ const Teacher = () => {
                          {/* Status Dot */}
                          <div className="flex items-center space-x-1.5 mt-1" title={cls.status ? cls.status.charAt(0).toUpperCase() + cls.status.slice(1) : 'Unknown'}>
                              <span className={`w-2.5 h-2.5 rounded-full ${statusColor} shadow-sm`}></span> {/* Added subtle shadow to dot */}
-                         </div>
+                      </div>
                     </div>
 
                     {/* Bottom Section: Details */}
@@ -234,11 +234,11 @@ const Teacher = () => {
                            <FiUsers className="w-3.5 h-3.5 mr-1.5 flex-shrink-0 opacity-80" />
                            {studentCount} Student{studentCount !== 1 ? 's' : ''}
                          </p>
-                    </div>
                   </div>
-                );
-              })
-            ) : (
+                </div>
+              );
+            })
+          ) : (
               <p className={`col-span-2 text-center mt-8 text-lg ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                 {searchTerm
                   ? `No classes found matching "${searchTerm}" ${activeFilter !== 'all' ? `with status "${activeFilter}"` : ''}.`

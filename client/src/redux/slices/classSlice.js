@@ -68,22 +68,26 @@ export const createClass = createAsyncThunk(
 
 export const generatefrequency = createAsyncThunk(
   "class/generatefrequency",
-  async ({ classId, teacherId, frequency }, { rejectWithValue }) => {
+  async ({ classId, teacherId, frequency, autoActivate = false }, { rejectWithValue }) => {
     try {
+      const token = localStorage.getItem("token");
       const response = await axios.post(`${API_URL}/generate-attendance`,
-        { classId, teacherId, frequency },
+        { classId, teacherId, frequency, autoActivate },
         {
           headers: {
             "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`,
           },
         }
       );
-      console.log("Received frequency:", response.data);
-      // Store frequency in localStorage with classId
+      console.log("Received frequency response:", response.data);
+      
+      // Store frequency in localStorage with classId as a backup mechanism
       localStorage.setItem(`frequency_${classId}`, JSON.stringify(frequency));
       
       return frequency;
     } catch (error) {
+      console.error("Error generating frequency:", error);
       return rejectWithValue(error.response?.data?.message || "Failed to generate frequency");
     }
   }
@@ -132,10 +136,10 @@ export const fetchClassDetails = createAsyncThunk(
 // Update saveDailyAttendance thunk payload
 export const saveDailyAttendance = createAsyncThunk(
   "class/saveAttendance",
-  // Expects { classId, date, sessionType, attendanceList, recordedBy }
+  // Expects { classId, date, sessionType, attendanceList, recordedBy, markCompleted }
   async (attendanceData, { rejectWithValue }) => {
     try {
-      const { classId, ...payload } = attendanceData; // payload now includes date, sessionType, attendanceList, recordedBy
+      const { classId, ...payload } = attendanceData; // payload now includes date, sessionType, attendanceList, recordedBy, markCompleted
       const token = localStorage.getItem("token");
 
       const response = await axios.post(`${API_URL}/${classId}/attendance`, payload, {
@@ -144,7 +148,29 @@ export const saveDailyAttendance = createAsyncThunk(
           'Content-Type': 'application/json',
         },
       });
-      return { classId, date: payload.date, sessionType: payload.sessionType, responseData: response.data };
+      
+      // Check if the response indicates that attendance was already recorded
+      const result = response.data;
+      if (result.alreadyRecorded) {
+        // Return the existing records as part of our response
+        return { 
+          classId, 
+          date: payload.date, 
+          sessionType: payload.sessionType, 
+          alreadyRecorded: true,
+          data: result.data 
+        };
+      }
+      
+      // Standard response for newly saved attendance
+      return { 
+        classId, 
+        date: payload.date, 
+        sessionType: payload.sessionType, 
+        alreadyRecorded: false,
+        responseData: result,
+        active: result.active // Include active state from response
+      };
     } catch (error) {
       // Handle errors
       const message =
@@ -162,19 +188,69 @@ export const saveDailyAttendance = createAsyncThunk(
 // <<< NEW THUNK for student marking >>>
 export const markStudentPresentByFrequency = createAsyncThunk(
   "class/markStudentPresent",
-  // Expects { classId, studentId, detectedFrequency }
+  // Expects { classId, studentId, detectedFrequency, sessionType }
   async (markData, { rejectWithValue }) => {
     try {
       const token = localStorage.getItem("token"); // Or however student auth is handled
 
-      // Call the new backend endpoint
-      const response = await axios.post(`${API_URL}/attendance/mark-by-frequency`, markData, {
+      // Ensure we have a session type, defaulting to 'lecture' if not provided
+      const dataToSend = {
+        ...markData,
+        sessionType: markData.sessionType || 'lecture'
+      };
+
+      console.log("Marking student present with data:", dataToSend);
+
+      // Call the backend endpoint
+      const response = await axios.post(`${API_URL}/attendance/mark-by-frequency`, dataToSend, {
         headers: {
           Authorization: `Bearer ${token}`, // If student needs auth
           'Content-Type': 'application/json',
         },
       });
       return response.data; // Return success message or relevant data
+    } catch (error) {
+      const message = error.response?.data?.message || error.message || error.toString();
+      return rejectWithValue(message);
+    }
+  }
+);
+
+// New thunk for starting an attendance session
+export const startAttendanceSession = createAsyncThunk(
+  "class/startAttendanceSession",
+  // Expects { classId, sessionType }
+  async (sessionData, { rejectWithValue }) => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await axios.post(`${API_URL}/attendance/start-session`, sessionData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      return response.data;
+    } catch (error) {
+      const message = error.response?.data?.message || error.message || error.toString();
+      return rejectWithValue(message);
+    }
+  }
+);
+
+// New thunk for ending an attendance session
+export const endAttendanceSession = createAsyncThunk(
+  "class/endAttendanceSession",
+  // Expects { classId }
+  async (sessionData, { rejectWithValue }) => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await axios.post(`${API_URL}/attendance/end-session`, sessionData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      return response.data;
     } catch (error) {
       const message = error.response?.data?.message || error.message || error.toString();
       return rejectWithValue(message);

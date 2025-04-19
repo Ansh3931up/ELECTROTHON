@@ -2,6 +2,9 @@ import AppError from "../utils/error.utils.js";
 import Class from "../models/class.model.js";
 import User from "../models/user.model.js";
 import mongoose from 'mongoose'; // Import mongoose for ObjectId validation
+import { emitToClass } from '../config/socket.js';
+import expressAsyncHandler from 'express-async-handler';
+const asyncHandler = expressAsyncHandler;
 
 
 
@@ -86,66 +89,72 @@ export const registerClass = async (req, res, next) =>
 };
 
 
-export const generateAttendance = async (req, res, next) => {
+export const generateAttendance = async (req, res) => {
   try {
-    console.log("Received Request:", req.body);
+    const { classId, teacherId, frequency, autoActivate = false } = req.body;
 
-    const { classId, teacherId, frequency } = req.body;
-
-    // --- Validations ---
-    if (!classId) {
-      console.log("❌ Error: Class ID is missing");
-      return next(new AppError("Class ID is required", 400));
-    }
-    // Add frequency validation if needed (e.g., is it an array of numbers?)
-    if (!frequency || !Array.isArray(frequency) || frequency.length === 0) {
-         return next(new AppError("Valid frequency array is required", 400));
-    }
-    const teacherData = await User.findById(teacherId);
-    if (!teacherData || teacherData.role !== 'teacher') { // Also check role
-      console.log("❌ Error: Teacher not found or invalid role");
-      return next(new AppError("Teacher ID is not valid or user is not a teacher", 400));
+    // Validate that required fields are present
+    if (!classId || !teacherId || !frequency) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields: classId, teacherId, or frequency",
+      });
     }
 
-    // Find class
-    const classData = await Class.findById(classId);
-    if (!classData) {
-      console.log("❌ Error: Class not found");
-      return next(new AppError("Class not found", 404));
+    // Find the class to verify it exists and the teacher owns it
+    const classToUpdate = await Class.findById(classId);
+
+    if (!classToUpdate) {
+      return res.status(404).json({
+        success: false,
+        message: "Class not found",
+      });
     }
-     // Optional: Check if teacherId matches the class teacher
-     // if (classData.teacherId.toString() !== teacherId) {
-     //     return next(new AppError("Provided teacher is not assigned to this class", 403));
-     // }
 
+    // Optional: Verify teacher has permission (adjust as needed for your schema)
+    if (classToUpdate.teacherId.toString() !== teacherId) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to generate frequency for this class",
+      });
+    }
 
-    // --- Update class with new frequency ---
-    classData.frequency = frequency; // Assign the received frequency array
+    // Update the frequency array in the class document
+    classToUpdate.frequency = Array.isArray(frequency) ? frequency : [frequency]; 
+    classToUpdate.frequencyUpdatedAt = new Date(); // Timestamp the update
 
-    // Save the updated class document (with the new frequency)
-    await classData.save();
+    // Save the updated class document
+    await classToUpdate.save();
+    console.log(`Frequency ${frequency} saved for class ${classId}`);
 
-    // Set timeout to clear frequency (this part is likely correct)
-    setTimeout(async () => {
-      try {
-          // Use findByIdAndUpdate with $set for atomic update
-          await Class.findByIdAndUpdate(classId, { $set: { frequency: [] } }, { new: true }); // new: true is optional
-          console.log(`⚠️ frequency removed for class ${classId}`);
-      } catch(timeoutError) {
-          console.error(`Error clearing frequency for class ${classId} in timeout:`, timeoutError);
-      }
-    }, 3 * 60 * 1000); // 3 minutes
+    // Get student IDs for notification
+    const studentIds = classToUpdate.studentList || [];
+    const studentCount = studentIds.length;
 
-    // Send success response
-    res.status(200).json({
+    // Emit real-time Socket.io event to notify students
+    emitToClass(classId, 'attendanceStarted', {
+      classId,
+      frequency,
+      teacherId,
+      className: classToUpdate.className,
+      timestamp: new Date().toISOString(),
+      autoDetect: autoActivate, // Pass the autoActivate flag to students
+      message: `Attendance check initiated by teacher for ${classToUpdate.className}`
+    });
+
+    return res.status(200).json({
       success: true,
-      message: "Frequency generated and stored successfully!",
-      frequency, // Return the frequency that was saved
+      message: `Frequency generated and broadcast to ${studentCount} students`,
+      frequency,
+      studentsNotified: studentCount
     });
   } catch (error) {
-    console.log("❌ Backend Error:", error);
-     // Provide more specific error message if possible
-    next(new AppError(error.message || "Internal server error generating frequency", 500));
+    console.error("Error generating frequency:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
   }
 };
 
@@ -159,10 +168,11 @@ export const getClassfrequency = async (req, res, next) => {
       return next(new AppError("Class not found", 404));
     }
 
-    // Return the frequency stored in the class document
+    // Return the frequency array and timestamp
     res.status(200).json({
       success: true,
-      frequency: classDetails.frequency || []
+      frequency: classDetails.frequency || [],
+      updatedAt: classDetails.frequencyUpdatedAt || null
     });
 
   } catch (error) {
@@ -260,229 +270,474 @@ export const getClassDetails = async (req, res, next) => {
 export const saveDailyAttendance = async (req, res, next) => {
   try {
     const { classId } = req.params;
-    // Expecting sessionType: 'lecture' | 'lab'
-    const { date, sessionType, attendanceList, recordedBy } = req.body;
+    const { date, sessionType, attendanceList, recordedBy, markCompleted = true } = req.body;
 
-    // --- Validation ---
-    if (!mongoose.Types.ObjectId.isValid(classId)) {
-        return next(new AppError("Invalid Class ID format", 400));
+    if (!classId || !date || !sessionType || !attendanceList || !recordedBy) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields",
+      });
     }
-    if (!date || !sessionType || !['lecture', 'lab'].includes(sessionType) || !attendanceList || !Array.isArray(attendanceList) || !recordedBy) {
-         return next(new AppError("Missing/Invalid fields: date, sessionType ('lecture'|'lab'), attendanceList (array), and recordedBy required", 400));
-    }
-    if (!mongoose.Types.ObjectId.isValid(recordedBy)) {
-        return next(new AppError("Invalid Recorded By ID format", 400));
-    }
-    const attendanceDate = new Date(date);
-    if (isNaN(attendanceDate.getTime())) {
-       return next(new AppError("Invalid date format provided", 400));
-    }
-    attendanceDate.setUTCHours(0, 0, 0, 0); // Normalize date
 
-    // --- Verify Class and Teacher ---
+    if (!['lecture', 'lab'].includes(sessionType)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid session type. Must be 'lecture' or 'lab'",
+      });
+    }
+
+    // Find the class
     const classDoc = await Class.findById(classId);
     if (!classDoc) {
-      return next(new AppError("Class not found", 404));
-    }
-    const teacher = await User.findById(recordedBy);
-    if (!teacher || teacher.role !== 'teacher') {
-        return next(new AppError("Invalid recorder ID or user is not a teacher", 403));
-    }
-
-    // --- Prepare new session records ---
-    const newSessionRecords = [];
-    const studentIdsInClass = classDoc.studentList.map(id => id.toString());
-    for (const record of attendanceList) {
-        if (!record.studentId || !record.status || !['present', 'absent'].includes(record.status)) {
-            return next(new AppError(`Invalid data in attendanceRecords array: Each record must have studentId and status ('present' or 'absent'). Invalid record: ${JSON.stringify(record)}`, 400));
-        }
-        if (!mongoose.Types.ObjectId.isValid(record.studentId)) {
-            return next(new AppError(`Invalid Student ID format: ${record.studentId}`, 400));
-        }
-        if (!studentIdsInClass.includes(record.studentId)) {
-            console.warn(`Attempted to save attendance for student ${record.studentId} not in class ${classId}`);
-            continue; // Skip this record
-        }
-        newSessionRecords.push({
-            studentId: record.studentId,
-            status: record.status,
-            recordedBy: recordedBy,
-            recordedAt: new Date()
-        });
+      return res.status(404).json({
+        success: false,
+        message: "Class not found",
+      });
     }
 
-    // --- Find or Create Daily Attendance Record and Update ---
-    const updateResult = await Class.updateOne(
-        { // Filter criteria to find the class and the specific date's record
-            _id: classId,
-            "attendanceRecords.date": attendanceDate
-        },
-        { // Set the specific sessionType array for that date
-            $set: { [`attendanceRecords.$.${sessionType}`]: newSessionRecords }
-        }
+    // Convert date string to Date object and normalize to midnight UTC
+    const recordDate = new Date(date);
+    recordDate.setUTCHours(0, 0, 0, 0);
+
+    // Format the attendance records with required fields
+    const formattedAttendance = attendanceList.map(item => ({
+      studentId: item.studentId,
+      status: item.status,
+      recordedBy,
+      recordedAt: new Date()
+    }));
+
+    // Check if there's already a record for this date
+    const existingRecordIndex = classDoc.attendanceRecords.findIndex(
+      record => {
+        const recordDateObj = new Date(record.date);
+        recordDateObj.setUTCHours(0, 0, 0, 0);
+        return recordDateObj.getTime() === recordDate.getTime();
+      }
     );
 
-    // If no document matched the date filter (updateResult.matchedCount === 0),
-    // it means we need to create the entry for this date.
-    if (updateResult.matchedCount === 0) {
-        await Class.updateOne(
-            { _id: classId },
-            { // Push a new dailyAttendance object
-                $push: {
-                    attendanceRecords: {
-                        date: attendanceDate,
-                        [sessionType]: newSessionRecords, // Set the lecture OR lab array
-                        // Initialize the other array as empty if needed
-                        [sessionType === 'lecture' ? 'lab' : 'lecture']: []
-                    }
-                }
-            }
-        );
+    if (existingRecordIndex !== -1) {
+      const record = classDoc.attendanceRecords[existingRecordIndex];
+
+      // Convert flat arrays to objects if needed (for compatibility with schema change)
+      if (Array.isArray(record.lecture)) {
+        record.lecture = { records: record.lecture, active: !markCompleted && sessionType === 'lecture' };
+      } else if (!record.lecture) {
+        record.lecture = { records: [], active: !markCompleted && sessionType === 'lecture' };
+      }
+
+      if (Array.isArray(record.lab)) {
+        record.lab = { records: record.lab, active: !markCompleted && sessionType === 'lab' };
+      } else if (!record.lab) {
+        record.lab = { records: [], active: !markCompleted && sessionType === 'lab' };
+      }
+      
+      // Check if this session type already has records
+      if (record[sessionType].records && record[sessionType].records.length > 0) {
+        // Return the existing records so client can display them
+        const existingAttendance = record;
+        
+        // Populate student details for UI display
+        const populatedRecords = await Class.populate(classDoc, {
+          path: `attendanceRecords.${sessionType}.records.studentId`,
+          select: 'firstName lastName email',
+        });
+        
+        return res.status(200).json({
+          success: true,
+          alreadyRecorded: true,
+          message: `${sessionType} attendance has already been recorded for this date`,
+          data: {
+            date: existingAttendance.date,
+            sessionType,
+            attendanceRecords: populatedRecords.attendanceRecords[existingRecordIndex][sessionType].records
+          }
+        });
+      }
+      
+      // If we reach here, this session type hasn't been recorded yet for today
+      record[sessionType].records = formattedAttendance;
+      
+      // Set active status based on markCompleted flag for this specific session type
+      if (markCompleted) {
+        record[sessionType].active = false;
+        console.log(`Marking ${sessionType} session for ${date} as inactive (completed)`);
+      }
+      
+    } else {
+      // Create a new record for this date with the session-specific active flag
+      const newAttendanceRecord = {
+        date: recordDate,
+        lecture: { 
+          records: sessionType === 'lecture' ? formattedAttendance : [],
+          active: sessionType === 'lecture' ? !markCompleted : true
+        },
+        lab: { 
+          records: sessionType === 'lab' ? formattedAttendance : [],
+          active: sessionType === 'lab' ? !markCompleted : true
+        }
+      };
+      
+      classDoc.attendanceRecords.push(newAttendanceRecord);
     }
 
-    res.status(200).json({
-        success: true,
-        message: `Attendance for ${sessionType} on ${attendanceDate.toLocaleDateString()} updated successfully.`,
-        data: { savedCount: newSessionRecords.length }
+    await classDoc.save();
+
+    // Emit attendance ended event when we save and complete a session
+    if (markCompleted) {
+      emitToClass(classId, 'attendanceEnded', {
+        classId,
+        sessionType,
+        message: `Attendance for ${sessionType} has ended`,
+        timestamp: new Date().toISOString(),
+        priority: 'high' // Mark as high priority
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Attendance saved successfully",
+      active: !markCompleted // Return the current active state
     });
-
   } catch (error) {
-    if (error.name === 'CastError') {
-       return next(new AppError(`Invalid ObjectId format found in request.`, 400));
-    }
-    // Handle Mongoose validation errors if any during save
-     if (error.name === 'ValidationError') {
-        return next(new AppError(error.message, 400));
-    }
-    return next(new AppError(error.message || "Internal server error saving attendance", 500));
+    next(error);
   }
 };
 
-// --- NEW Controller: markStudentPresentByFrequency ---
-export const markStudentPresentByFrequency = async (req, res, next) => {
-    try {
-        const { classId, studentId, detectedFrequency } = req.body;
-        // We need to know if this frequency applies to lecture or lab.
-        // Option 1: Infer from classType (simplest for now)
-        // Option 2: Teacher sets an "active session type" when generating freq.
-        // Option 3: Student sends sessionType (less reliable).
-        // Let's use Option 1 for now.
+// --- NEW THUNK for student marking >>>
+export const markStudentPresentByFrequency = asyncHandler(async (req, res) => {
+  const { classId, studentId, detectedFrequency, sessionType: requestedSessionType } = req.body;
 
-        // --- Validation ---
-        if (!mongoose.Types.ObjectId.isValid(classId)) {
-            return next(new AppError("Invalid Class ID format", 400));
-        }
-        if (!mongoose.Types.ObjectId.isValid(studentId)) {
-            return next(new AppError("Invalid Student ID format", 400));
-        }
-        if (detectedFrequency === undefined || typeof detectedFrequency !== 'number') {
-            return next(new AppError("Detected frequency (number) is required", 400));
-        }
+  // Input validation
+  if (!classId || !studentId || !detectedFrequency) {
+    return res.status(400).json({ message: 'All fields required' });
+  }
 
-        // --- Verify Student ---
-        const student = await User.findById(studentId);
-        if (!student || student.role !== 'student') {
-            return next(new AppError("Invalid student ID or user is not a student", 400));
-        }
-
-        // --- Find Class, Check Frequency & Determine Session Type ---
-        const classDoc = await Class.findById(classId);
-        if (!classDoc) {
-            return next(new AppError("Class not found", 404));
-        }
-        if (!classDoc.studentList.some(id => id.toString() === studentId)) {
-            return next(new AppError("Student is not enrolled in this class", 403));
-        }
-
-        const storedFrequency = classDoc.frequency?.[0];
-        if (storedFrequency === undefined) {
-            return next(new AppError("No active special frequency for this class", 404));
-        }
-
-        const tolerance = 5;
-        const isMatch = Math.abs(storedFrequency - detectedFrequency) <= tolerance;
-        if (!isMatch) {
-            return next(new AppError(`Frequency mismatch. Expected ~${storedFrequency}Hz, received ${detectedFrequency}Hz.`, 400));
-        }
-
-        // <<< Determine target session type based on class setting >>>
-        const targetSessionType = classDoc.classType; // 'lecture' or 'lab'
-
-        // --- Update/Add Attendance Record within the Correct Session Type ---
-        const attendanceDate = new Date();
-        attendanceDate.setUTCHours(0, 0, 0, 0); // Normalize
-
-        // Try to update an existing student record within the date and session type
-        const updateResult = await Class.updateOne(
-            {
-                _id: classId,
-                "attendanceRecords": { // Find the daily record matching the date
-                    $elemMatch: { date: attendanceDate }
-                }
-            },
-            { // Update the student's status within the correct session array
-                $set: {
-                    [`attendanceRecords.$[outer].${targetSessionType}.$[inner].status`]: "present",
-                    [`attendanceRecords.$[outer].${targetSessionType}.$[inner].recordedAt`]: new Date(),
-                    [`attendanceRecords.$[outer].${targetSessionType}.$[inner].recordedBy`]: studentId
-                }
-            },
-            { // Array filters to target the specific nested elements
-                arrayFilters: [
-                    { "outer.date": attendanceDate },
-                    { "inner.studentId": studentId }
-                ]
-            }
-        );
-
-        // If nothing was updated (either date or student within session didn't exist)
-        if (updateResult.matchedCount === 0 || updateResult.modifiedCount === 0) {
-            // Prepare the new student record
-            const newStudentRecord = {
-                studentId: studentId,
-                status: "present",
-                recordedBy: studentId,
-                recordedAt: new Date()
-            };
-
-            // Try adding the student to an *existing* date's session array
-            const pushToExistingDateResult = await Class.updateOne(
-                 {
-                    _id: classId,
-                    "attendanceRecords.date": attendanceDate
-                 },
-                 { // Add the student record to the correct session array
-                    $push: { [`attendanceRecords.$.${targetSessionType}`]: newStudentRecord }
-                 }
-            );
-
-            // If the date itself didn't exist, create the date entry and add the student
-            if (pushToExistingDateResult.matchedCount === 0) {
-                await Class.updateOne(
-                    { _id: classId },
-                    {
-                        $push: {
-                            attendanceRecords: {
-                                date: attendanceDate,
-                                [targetSessionType]: [newStudentRecord], // Add student to target type
-                                [targetSessionType === 'lecture' ? 'lab' : 'lecture']: [] // Init other type
-                            }
-                        }
-                    }
-                );
-            }
-        }
-
-        res.status(200).json({
-            success: true,
-            message: `Attendance marked as present for ${targetSessionType} successfully via frequency.`,
-        });
-
-    } catch (error) {
-        console.error("Error in markStudentPresentByFrequency:", error);
-        next(new AppError(error.message || "Internal server error marking attendance", 500));
+  try {
+    // Find the class document
+    const classDoc = await Class.findById(classId);
+    if (!classDoc) {
+      return res.status(404).json({ message: 'Class not found' });
     }
-};
+
+    // Check if the frequency matches
+    const frequencyThreshold = 10;
+    const storedFrequency = Array.isArray(classDoc.frequency) && classDoc.frequency.length > 0 
+      ? classDoc.frequency[0] 
+      : null;
+    
+    if (!storedFrequency || Math.abs(storedFrequency - detectedFrequency) > frequencyThreshold) {
+      return res.status(400).json({
+        message: 'Frequency does not match',
+        expected: storedFrequency,
+        detected: detectedFrequency
+      });
+    }
+
+    // Verify student is enrolled in the class
+    const enrolledStudent = classDoc.studentList.find(s => s.toString() === studentId);
+    if (!enrolledStudent) {
+      return res.status(403).json({ message: 'Student not enrolled in this class' });
+    }
+
+    // Find student details for the notification
+    const student = await User.findById(studentId).select('fullName');
+    if (!student) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+    
+    // Find today's attendance record
+    const todayDate = new Date();
+    todayDate.setUTCHours(0, 0, 0, 0); // Normalize date to midnight UTC
+
+    // Find if there's an attendance record for today
+    let attendanceRecord = classDoc.attendanceRecords.find(
+      record => new Date(record.date).toISOString().split('T')[0] === todayDate.toISOString().split('T')[0]
+    );
+
+    // If no attendance record exists, or session type isn't specified, return an error
+    if (!attendanceRecord) {
+      return res.status(400).json({ message: 'No attendance session found for today' });
+    }
+
+    // Convert flat arrays to objects if needed (for compatibility with schema change)
+    if (Array.isArray(attendanceRecord.lecture)) {
+      attendanceRecord.lecture = { records: attendanceRecord.lecture, active: true };
+    } else if (!attendanceRecord.lecture) {
+      attendanceRecord.lecture = { records: [], active: false };
+    }
+
+    if (Array.isArray(attendanceRecord.lab)) {
+      attendanceRecord.lab = { records: attendanceRecord.lab, active: true };
+    } else if (!attendanceRecord.lab) {
+      attendanceRecord.lab = { records: [], active: false };
+    }
+
+    // Determine which session type to use - look for the one that's active
+    let sessionType = null;
+    if (requestedSessionType && ['lecture', 'lab'].includes(requestedSessionType)) {
+      // If a specific type is requested, use that if it's active
+      if (attendanceRecord[requestedSessionType].active) {
+        sessionType = requestedSessionType;
+      } else {
+        return res.status(400).json({ 
+          message: `The ${requestedSessionType} session is not currently active`
+        });
+      }
+    } else {
+      // If no session type specified, look for any active session
+      if (attendanceRecord.lecture.active) {
+        sessionType = 'lecture';
+      } else if (attendanceRecord.lab.active) {
+        sessionType = 'lab';
+      } else {
+        return res.status(400).json({ message: 'No active attendance session found' });
+      }
+    }
+
+    console.log(`Using session type: ${sessionType} for attendance marking`);
+    
+    // Create the student attendance object with the required fields
+    const studentAttendance = {
+      studentId: studentId,
+      status: 'present',
+      recordedBy: classDoc.teacherId, // Teacher ID as the recorder
+      recordedAt: new Date()
+    };
+
+    // Check if this student already has an attendance record for this session
+    const existingRecordIndex = attendanceRecord[sessionType].records.findIndex(
+      record => record.studentId.toString() === studentId
+    );
+
+    if (existingRecordIndex === -1) {
+      // Add the new record to the existing session array
+      attendanceRecord[sessionType].records.push(studentAttendance);
+
+      await classDoc.save();
+
+      // Emit to the class for real-time updates
+      emitToClass(classId, 'attendanceUpdate', {
+        classId,
+        studentId,
+        studentName: student.fullName,
+        status: 'present',
+        sessionType: sessionType,
+        timestamp: new Date().toISOString(),
+        priority: 'high' // Mark as important
+      });
+
+      res.status(200).json({ 
+        message: 'Attendance marked successfully',
+        sessionType: sessionType 
+      });
+    } else {
+      // Student already marked
+      res.status(200).json({
+        message: 'Attendance already recorded for this student',
+        sessionType: sessionType
+      });
+    }
+  } catch (error) {
+    console.error('Error marking attendance by frequency:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Add a new function to start an attendance session
+export const startAttendanceSession = asyncHandler(async (req, res) => {
+  const { classId, sessionType } = req.body;
+  const teacherId = req.user?.id;
+
+  // Validate inputs
+  if (!classId || !sessionType || !['lecture', 'lab'].includes(sessionType)) {
+    return res.status(400).json({ 
+      success: false,
+      message: 'Class ID and valid session type (lecture or lab) are required' 
+    });
+  }
+
+  try {
+    // Find the class
+    const classDoc = await Class.findById(classId);
+    console.log("Class Doc:", classDoc);
+    if (!classDoc) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Class not found' 
+      });
+    }
+
+    // Verify teacher has permission
+    if (classDoc.teacherId.toString() !== teacherId) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Not authorized to manage attendance for this class' 
+      });
+    }
+
+    // Check if there's already an attendance record for today with this session type
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    
+    let todayRecord = classDoc.attendanceRecords.find(record => {
+      const recordDate = new Date(record.date);
+      recordDate.setUTCHours(0, 0, 0, 0);
+      return recordDate.getTime() === today.getTime();
+    });
+
+    // Check if session is already recorded
+    if (todayRecord && 
+        todayRecord[sessionType] && 
+        todayRecord[sessionType].records && 
+        todayRecord[sessionType].records.length > 0) {
+      return res.status(400).json({ 
+        success: false, 
+        message: `${sessionType.charAt(0).toUpperCase() + sessionType.slice(1)} attendance has already been recorded for today` 
+      });
+    }
+
+    // Convert flat arrays to the new object structure if needed
+    if (todayRecord) {
+      // Handle cases where the schema was recently updated
+      if (Array.isArray(todayRecord.lecture)) {
+        todayRecord.lecture = { 
+          records: todayRecord.lecture,
+          active: sessionType === 'lecture'
+        };
+      } else if (!todayRecord.lecture) {
+        todayRecord.lecture = { records: [], active: sessionType === 'lecture' };
+      } else {
+        // Just update the active flag
+        todayRecord.lecture.active = sessionType === 'lecture';
+      }
+
+      if (Array.isArray(todayRecord.lab)) {
+        todayRecord.lab = { 
+          records: todayRecord.lab,
+          active: sessionType === 'lab'
+        };
+      } else if (!todayRecord.lab) {
+        todayRecord.lab = { records: [], active: sessionType === 'lab' };
+      } else {
+        // Just update the active flag
+        todayRecord.lab.active = sessionType === 'lab';
+      }
+    } else {
+      // Create a new attendance record for today with the specific session active
+      todayRecord = {
+        date: today,
+        lecture: { 
+          records: [],
+          active: sessionType === 'lecture'
+        },
+        lab: { 
+          records: [],
+          active: sessionType === 'lab'
+        }
+      };
+      classDoc.attendanceRecords.push(todayRecord);
+    }
+
+    await classDoc.save();
+
+    // Emit to all students that attendance has started - with important session type info
+    emitToClass(classId, 'attendanceStarted', {
+      classId,
+      sessionType,
+      teacherId,
+      message: `Attendance for ${sessionType} has started`,
+      timestamp: new Date().toISOString(),
+      priority: 'high' // Mark this as high priority
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `${sessionType.charAt(0).toUpperCase() + sessionType.slice(1)} attendance session started`,
+      sessionData: {
+        sessionType,
+        startedAt: new Date().toISOString()
+      }
+    });
+
+  } catch (error) {
+    console.error('Error starting attendance session:', error);
+    return res.status(500).json({ 
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+});
+
+// Add a function to end an attendance session
+export const endAttendanceSession = asyncHandler(async (req, res) => {
+  const { classId } = req.body;
+  const teacherId = req.user?.id;
+
+  // Validate inputs
+  if (!classId) {
+    return res.status(400).json({ 
+      success: false,
+      message: 'Class ID is required' 
+    });
+  }
+
+  try {
+    // Find the class
+    const classDoc = await Class.findById(classId);
+    if (!classDoc) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Class not found' 
+      });
+    }
+
+    // Verify teacher has permission
+    if (classDoc.teacherId.toString() !== teacherId) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Not authorized to manage attendance for this class' 
+      });
+    }
+
+    // Check if there's an active session
+    if (!classDoc.activeAttendanceSession || !classDoc.activeAttendanceSession.isActive) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'No active attendance session found' 
+      });
+    }
+
+    // Deactivate the session
+    classDoc.activeAttendanceSession.isActive = false;
+    classDoc.activeAttendanceSession.endedAt = new Date();
+
+    await classDoc.save();
+
+    // Emit to all students that attendance has ended
+    emitToClass(classId, 'attendanceEnded', {
+      classId,
+      sessionType: classDoc.activeAttendanceSession.sessionType,
+      message: `Attendance for ${classDoc.activeAttendanceSession.sessionType} has ended`,
+      timestamp: new Date().toISOString()
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Attendance session ended',
+      sessionData: classDoc.activeAttendanceSession
+    });
+
+  } catch (error) {
+    console.error('Error ending attendance session:', error);
+    return res.status(500).json({ 
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+});
 
 // <<< UPDATED FUNCTION to edit class details >>>
 export const editClassDetails = async (req, res, next) => {
@@ -490,7 +745,7 @@ export const editClassDetails = async (req, res, next) => {
         console.log("Editing class details - Req Params:", req.params); // Added for testing
         console.log("Editing class details - Req Body:", req.body); // Added for testing
         const { classId } = req.params;
-        // --- Updated fields allowed for update ---
+        // --- Updated fields allowed for update --- 
         const { className, schedule, batch,status } = req.body;
         const userId = req.user?.id; // ID of user making the request
 
@@ -592,4 +847,123 @@ export const getTeacherSchedule = async (req, res, next) => {
     console.error("Error fetching teacher schedule:", error);
     next(new AppError(error.message || "Failed to fetch teacher schedule", 500));
    }
+};
+
+// Get attendance records for a specific date and session type
+export const getAttendanceByDateAndType = async (req, res, next) => {
+  try {
+    const { classId } = req.params;
+    const { date, sessionType } = req.query;
+
+    if (!mongoose.Types.ObjectId.isValid(classId)) {
+      return next(new AppError("Invalid Class ID format", 400));
+    }
+    
+    if (!date || !sessionType || !['lecture', 'lab'].includes(sessionType)) {
+      return next(new AppError("Date and valid session type (lecture/lab) are required", 400));
+    }
+
+    // Convert date string to Date object and normalize to midnight UTC
+    const attendanceDate = new Date(date);
+    if (isNaN(attendanceDate.getTime())) {
+      return next(new AppError("Invalid date format", 400));
+    }
+    attendanceDate.setUTCHours(0, 0, 0, 0);
+
+    // Find the class
+    const classDoc = await Class.findById(classId);
+    if (!classDoc) {
+      return next(new AppError("Class not found", 404));
+    }
+
+    // Find the attendance record for this date
+    const attendanceRecord = classDoc.attendanceRecords.find(record => {
+      const recordDate = new Date(record.date);
+      recordDate.setUTCHours(0, 0, 0, 0);
+      return recordDate.getTime() === attendanceDate.getTime();
+    });
+
+    if (!attendanceRecord) {
+      return res.status(200).json({
+        success: true,
+        message: "No attendance records found for this date",
+        data: { date: attendanceDate, sessionType, attendanceRecords: [] }
+      });
+    }
+
+    // Populate student details
+    await Class.populate(attendanceRecord, {
+      path: `${sessionType}.studentId`,
+      select: 'fullName email'
+    });
+
+    // Return the specific session type attendance
+    return res.status(200).json({
+      success: true,
+      message: `Attendance records for ${sessionType} on ${attendanceDate.toISOString().split('T')[0]}`,
+      data: {
+        date: attendanceRecord.date,
+        sessionType,
+        attendanceRecords: attendanceRecord[sessionType] || []
+      }
+    });
+
+  } catch (error) {
+    return next(new AppError(error.message || "Failed to fetch attendance records", 500));
+  }
+};
+
+// Socket handler for fetching attendance - can be used in socket middleware
+export const fetchAttendanceForSocket = async (classId, date, sessionType) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(classId)) {
+      throw new Error("Invalid Class ID format");
+    }
+    
+    if (!date || !sessionType || !['lecture', 'lab'].includes(sessionType)) {
+      throw new Error("Date and valid session type (lecture/lab) are required");
+    }
+
+    // Convert date string to Date object and normalize to midnight UTC
+    const attendanceDate = new Date(date);
+    if (isNaN(attendanceDate.getTime())) {
+      throw new Error("Invalid date format");
+    }
+    attendanceDate.setUTCHours(0, 0, 0, 0);
+
+    // Find the class
+    const classDoc = await Class.findById(classId);
+    if (!classDoc) {
+      throw new Error("Class not found");
+    }
+
+    // Find the attendance record for this date
+    const attendanceRecord = classDoc.attendanceRecords.find(record => {
+      const recordDate = new Date(record.date);
+      recordDate.setUTCHours(0, 0, 0, 0);
+      return recordDate.getTime() === attendanceDate.getTime();
+    });
+
+    if (!attendanceRecord) {
+      return {
+        success: true,
+        message: "No attendance records found for this date",
+        data: { date: attendanceDate, sessionType, attendanceRecords: [] }
+      };
+    }
+
+    // Return the specific session type attendance
+    return {
+      success: true,
+      message: `Attendance records for ${sessionType} on ${attendanceDate.toISOString().split('T')[0]}`,
+      data: {
+        date: attendanceRecord.date,
+        sessionType,
+        attendanceRecords: attendanceRecord[sessionType] || []
+      }
+    };
+
+  } catch (error) {
+    throw new Error(error.message || "Failed to fetch attendance records");
+    }
 };

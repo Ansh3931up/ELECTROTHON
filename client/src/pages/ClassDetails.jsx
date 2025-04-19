@@ -3,10 +3,19 @@ import React, { useEffect, useState } from "react";
 import { FiBookOpen, FiChevronLeft, FiClock, FiCpu, FiEdit, FiPause, FiPlay, FiUsers, FiX } from 'react-icons/fi';
 import { useDispatch, useSelector } from "react-redux";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { toast } from "react-hot-toast";
 
-import { clearAttendanceError, fetchClassDetails, generatefrequency, saveDailyAttendance } from "../redux/slices/classSlice";
+import { 
+  clearAttendanceError, 
+  fetchClassDetails, 
+  generatefrequency, 
+  saveDailyAttendance, 
+  startAttendanceSession,
+  endAttendanceSession 
+} from "../redux/slices/classSlice";
 import { sendFrequencySMS, storeOfflineFrequency } from "../utils/offlineMode";
 import { useTheme } from "../context/ThemeContext"; // Import theme context
+import { getSocket, initializeSocket, joinClassRoom, leaveClassRoom, initiateAttendance, markAttendance, disconnectSocket, fetchAttendanceData } from "../utils/socket";
 
 const generateRandomFrequency = () => {
   // ... (Keep the function as it was)
@@ -29,16 +38,20 @@ const ClassDetails = () => {
   const dispatch = useDispatch();
 
   // Selectors
-  const user = useSelector((state) => state.auth.user.user);
+  const user = useSelector((state) => state.auth.user);
   const { currentClass, loading, error, attendanceSaving, attendanceError } = useSelector((state) => state.class);
   console.log("currentClass", currentClass);
-
+  
   // State for attendance marking session
   const [isSelectingType, setIsSelectingType] = useState(false);
   const [currentSessionType, setCurrentSessionType] = useState(null);
   const [isMarkingMode, setIsMarkingMode] = useState(false);
   const [currentDailyAttendance, setCurrentDailyAttendance] = useState({});
   const [sortedStudentList, setSortedStudentList] = useState([]);
+  
+  // State to track real-time attendance
+  const [realTimeAttendance, setRealTimeAttendance] = useState({});
+  const [connectedStudents, setConnectedStudents] = useState(new Set());
 
   // Other state remains the same
   const [classFrequencies, setClassFrequencies] = useState({});
@@ -51,70 +64,321 @@ const ClassDetails = () => {
   const [audioContext, setAudioContext] = useState(null);
   const [oscillator, setOscillator] = useState(null);
 
-  const isClassTeacher = currentClass?.teacherId?._id === user?._id;
-  // console.log("isClassTeacher", classId);
+  const isClassTeacher = currentClass?.teacherId?._id === user?.user?._id;
+  // Check if there's an active attendance session
+  const hasActiveSession = currentClass?.activeAttendanceSession?.isActive || false;
+  const activeSessionType = currentClass?.activeAttendanceSession?.sessionType || null;
+
   useEffect(() => {
+    // Initialize socket connection
+    const socket = initializeSocket(user);
+
     if (id) {
       dispatch(fetchClassDetails(id));
+      // Join the class room for real-time updates
+      if (user?.user?._id) {
+        joinClassRoom(id, user.user._id);
+      }
     }
-    // Reset state... (remains the same)
+
+    // Reset state
     setIsMarkingMode(false);
     setIsSelectingType(false);
     setCurrentSessionType(null);
     setCurrentDailyAttendance({});
     dispatch(clearAttendanceError());
-  }, [dispatch, id]);
 
-  // Step 1: Only sets frontend state now
-  const handleInitiateAttendance = () => {
-    if (currentClass?.studentList) {
+    // Clean up function
+    return () => {
+      if (id && user?.user?._id) {
+        leaveClassRoom(id, user.user._id);
+      }
+    };
+  }, [dispatch, id, user?.user?._id]);
+
+  // When currentClass is updated, check if there's an active session and update UI accordingly
+  useEffect(() => {
+    if (!currentClass) return;
+
+    // First check if there's an active session directly from the class
+    if (currentClass.activeAttendanceSession?.isActive) {
+      setCurrentSessionType(currentClass.activeAttendanceSession.sessionType);
+      setIsMarkingMode(true);
+      setIsSelectingType(false);
+      
+      // Initialize attendance state if we're in an active session
+      if (currentClass.studentList) {
       const initialAttendance = {};
       currentClass.studentList.forEach(student => {
-        initialAttendance[student._id] = "absent"; // Default absent
+          // Check if this student already has attendance in realTimeAttendance
+          initialAttendance[student._id] = realTimeAttendance[student._id]?.status || "absent";
       });
       setCurrentDailyAttendance(initialAttendance);
-      setIsSelectingType(true); // Still ask for type first
+        sortStudentList(currentClass.studentList, initialAttendance);
+      }
+      return;
+    }
+    
+    // Next, check if there's a record for today that's marked as active
+    const today = new Date().toISOString().split('T')[0];
+    const todayRecord = currentClass.attendanceRecords?.find(record => {
+      const recordDate = new Date(record.date).toISOString().split('T')[0];
+      return recordDate === today && record.active;
+    });
+    
+    if (todayRecord) {
+      // There's an active record for today, but we need to determine the session type
+      // Check if we're in the middle of lecture or lab
+      const hasLecture = todayRecord.lecture && todayRecord.lecture.length > 0;
+      const hasLab = todayRecord.lab && todayRecord.lab.length > 0;
+      
+      if (!hasLecture && !hasLab) {
+        // No attendance has been recorded yet, show session type selection
+        setIsSelectingType(true);
+        setIsMarkingMode(false);
+        setCurrentSessionType(null);
+      } else if (hasLecture && !hasLab) {
+        // Lecture has been recorded but lab hasn't
+        setCurrentSessionType('lab');
+        setIsMarkingMode(true);
+        setIsSelectingType(false);
+        
+        // Initialize lab attendance
+        initializeAttendanceForSession('lab', todayRecord);
+      } else if (!hasLecture && hasLab) {
+        // Lab has been recorded but lecture hasn't
+        setCurrentSessionType('lecture');
+        setIsMarkingMode(true);
+        setIsSelectingType(false);
+        
+        // Initialize lecture attendance
+        initializeAttendanceForSession('lecture', todayRecord);
+      } else {
+        // Both have been recorded, show initial state
+        setIsMarkingMode(false);
+        setIsSelectingType(false);
+        setCurrentSessionType(null);
+      }
+    } else {
+      // No active record for today, show initial state
       setIsMarkingMode(false);
+      setIsSelectingType(false);
       setCurrentSessionType(null);
     }
+  }, [currentClass, realTimeAttendance]);
+
+  // Helper function to initialize attendance for a specific session type
+  const initializeAttendanceForSession = (sessionType, todayRecord) => {
+    if (!currentClass?.studentList) return;
+    
+    const initialAttendance = {};
+    currentClass.studentList.forEach(student => {
+      // Check if this student already has attendance in realTimeAttendance or in the record
+      const recordedAttendance = todayRecord[sessionType].find(
+        record => record.studentId._id === student._id || record.studentId === student._id
+      );
+      
+      initialAttendance[student._id] = 
+        realTimeAttendance[student._id]?.status || 
+        (recordedAttendance ? recordedAttendance.status : "absent");
+    });
+    
+    setCurrentDailyAttendance(initialAttendance);
+    sortStudentList(currentClass.studentList, initialAttendance);
   };
 
-  const handleSelectSessionType = (type) => {
-    if (currentClass?.studentList) {
-      // ... (initialize currentDailyAttendance as before - all absent) ...
-      const initialAttendance = {};
-      currentClass.studentList.forEach(student => {
-        initialAttendance[student._id] = "absent";
+  // Socket event listeners
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return;
+
+    // Listen for user joined event
+    socket.on('userJoined', ({ userId, count }) => {
+      console.log(`User ${userId} joined, ${count} users in room`);
+      setConnectedStudents(prev => new Set(prev).add(userId));
+    });
+
+    // Listen for user left event
+    socket.on('userLeft', ({ userId, count }) => {
+      console.log(`User ${userId} left, ${count} users in room`);
+      setConnectedStudents(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(userId);
+        return newSet;
       });
-      setCurrentDailyAttendance(initialAttendance);
-      setCurrentSessionType(type);
-      setIsSelectingType(false);
-      setIsMarkingMode(true);
-       // Initialize sorted list when marking starts
-       sortStudentList(currentClass.studentList, initialAttendance);
-    }
+    });
+
+    // Listen for attendance started event
+    socket.on('attendanceStarted', ({ classId, sessionType }) => {
+      console.log(`Attendance started for class ${classId}, session: ${sessionType}`);
+      
+      // If this is for the current class, refresh the class details to get the active session
+      if (classId === id) {
+        dispatch(fetchClassDetails(id));
+      }
+    });
+
+    // Listen for attendance updates
+    socket.on('attendanceUpdate', ({ classId, studentId, studentName, status, sessionType, timestamp }) => {
+      console.log(`Student ${studentId} (${studentName}) marked ${status} at ${timestamp} for class ${classId} - session: ${sessionType}`);
+      
+      // Make sure this update is for the current class
+      if (classId !== id) {
+        console.log(`Ignoring attendance update for different class: ${classId} (current: ${id})`);
+        return;
+      }
+      
+      // Update real-time attendance
+      setRealTimeAttendance(prev => ({
+        ...prev,
+        [studentId]: { status, timestamp, studentName, sessionType }
+      }));
+
+      // If we're in marking mode and the session types match, update the daily attendance
+      if (isMarkingMode && currentSessionType === sessionType) {
+        // Important: Always update currentDailyAttendance when a student marks themselves present
+        setCurrentDailyAttendance(prev => ({
+          ...prev,
+          [studentId]: status
+        }));
+        
+        // Re-sort the list with the updated data
+        if (currentClass?.studentList) {
+          sortStudentList(currentClass.studentList, {
+            ...currentDailyAttendance,
+            [studentId]: status
+          });
+        }
+      }
+    });
+
+    // Listen for session ended event
+    socket.on('attendanceEnded', ({ classId, sessionType }) => {
+      console.log(`Attendance session for ${sessionType} ended in class ${classId}`);
+      
+      // If this is for the current class, refresh the class details to get the updated session status
+      if (classId === id) {
+        dispatch(fetchClassDetails(id));
+      }
+    });
+
+    // Clean up listeners when component unmounts
+    return () => {
+      socket.off('userJoined');
+      socket.off('userLeft');
+      socket.off('attendanceStarted');
+      socket.off('attendanceUpdate');
+      socket.off('attendanceEnded');
+    };
+  }, [isMarkingMode, currentDailyAttendance, currentSessionType, currentClass?.studentList, id, dispatch]);
+
+  // Step 1: Show session type selection
+  const handleInitiateAttendance = () => {
+    setIsSelectingType(true);
+    setIsMarkingMode(false);
+    setCurrentSessionType(null);
   };
 
-  // UPDATED: Trigger sorting after changing status
+  // Step 2: Select session type and start the attendance session
+  const handleSelectSessionType = (type) => {
+    if (!currentClass?._id) return;
+    setCurrentSessionType(type);
+    
+    // Check if there's already attendance recorded for this date and type
+    const today = new Date().toISOString().split('T')[0];
+    
+    fetchAttendanceData(currentClass._id, today, type)
+      .then((data) => {
+        if (data.attendanceRecords && data.attendanceRecords.length > 0) {
+          toast.info(`${type.charAt(0).toUpperCase() + type.slice(1)} attendance records already exist for today`);
+          
+          // Format the data for the UI
+          const existingAttendance = data.attendanceRecords.map(record => ({
+            studentId: record.studentId._id,
+            studentName: `${record.studentId.firstName} ${record.studentId.lastName}`,
+            status: record.status,
+            _id: record._id
+          }));
+          
+          setCurrentDailyAttendance(existingAttendance);
+          sortStudentList(existingAttendance);
+        } else {
+          // If no existing records, start a new attendance session
+          dispatch(startAttendanceSession({ 
+            classId: currentClass._id, 
+            sessionType: type 
+          }))
+            .unwrap()
+            .then(() => {
+              // Session started successfully
+              dispatch(fetchClassDetails(id));
+              setCurrentDailyAttendance([]);
+              sortStudentList([]);
+            })
+            .catch(error => {
+              toast.error(`Failed to start attendance session: ${error}`);
+              setIsSelectingType(false);
+            });
+        }
+      })
+      .catch(error => {
+        console.error("Error checking existing attendance:", error);
+        // Fall back to the original behavior if there's an error checking attendance
+        dispatch(startAttendanceSession({ 
+          classId: currentClass._id, 
+          sessionType: type 
+        }))
+          .unwrap()
+          .then(() => {
+            dispatch(fetchClassDetails(id));
+          })
+          .catch(error => {
+            toast.error(`Failed to start attendance session: ${error}`);
+            setIsSelectingType(false);
+          });
+      });
+  };
+
+  // Handle manual attendance state updates
   const handleAttendanceChange = (studentId, status) => {
     const updatedAttendance = {
       ...currentDailyAttendance,
       [studentId]: status
     };
     setCurrentDailyAttendance(updatedAttendance);
+    
     // Re-sort the list based on the new attendance state
     sortStudentList(currentClass.studentList, updatedAttendance);
   };
-  // Step 3: Cancel the entire process (from type selection or marking)
+
+  // Cancel the attendance process
   const handleCancelAttendanceProcess = () => {
+    // If we're in an active session, end it on the server
+    if (hasActiveSession && currentClass?._id) {
+      dispatch(endAttendanceSession({ classId: currentClass._id }))
+        .unwrap()
+        .then(() => {
+          // Session ended successfully, reset UI state
+          setIsMarkingMode(false);
+          setIsSelectingType(false);
+          setCurrentSessionType(null);
+          setCurrentDailyAttendance({});
+          // Refresh class details
+          dispatch(fetchClassDetails(id));
+        })
+        .catch(error => {
+          alert(`Failed to end attendance session: ${error}`);
+        });
+    } else {
+      // Just reset the UI state
     setIsMarkingMode(false);
     setIsSelectingType(false);
     setCurrentSessionType(null);
     setCurrentDailyAttendance({});
-    // Optionally clear frequency states if needed
+    }
   };
 
-  // NEW: Client-side sorting function
+  // Student sorting remains the same
   const sortStudentList = (students, attendance) => {
     if (!students) return;
     const sorted = [...students].sort((a, b) => {
@@ -134,31 +398,48 @@ const ClassDetails = () => {
     // Potentially sync with a global offline state if needed
   };
 
+  // Updated to consider active session
   const handleGenerateFrequency = async () => {
-    if (!currentClass?._id) return;
+    if (!currentClass?._id || !hasActiveSession) return;
     const currentClassId = currentClass._id;
 
+    // Prevent multiple frequency generations in quick succession
     setDisabledButtons(prev => ({ ...prev, [currentClassId]: true }));
     setTimeout(() => {
       setDisabledButtons(prev => ({ ...prev, [currentClassId]: false }));
     }, 5000);
 
+    // Generate a new random frequency
     const newFrequency = await generateRandomFrequency();
     
     if (isOffline) {
-      // setSelectedClassId(currentClassId); // Not needed if only one class is shown
       setShowSMSForm(true);
       setClassFrequencies(prev => ({ ...prev, [currentClassId]: newFrequency }));
       storeOfflineFrequency(newFrequency);
     } else {
+      try {
+        // Save the frequency to the backend
       const result = await dispatch(generatefrequency({ 
         classId: currentClassId, 
-        teacherId: user._id,
-        frequency: newFrequency
+          teacherId: user.user._id,
+          frequency: newFrequency,
+          autoActivate: true // Flag to activate the frequency immediately
       }));
+        
       if (generatefrequency.fulfilled.match(result)) {
+          // Update local state with the saved frequency
         setClassFrequencies(prev => ({ ...prev, [currentClassId]: result.payload }));
         setShowFrequencyPopup(true);
+          
+          // Emit socket event to notify students - now includes session type
+          initiateAttendance(currentClassId, newFrequency, user.user._id, activeSessionType);
+          
+          // Show success message
+          alert(`Frequency generated and sent to ${currentClass?.studentList?.length || 0} students. Students will be prompted to automatically mark attendance for ${activeSessionType}.`);
+        }
+      } catch (error) {
+        console.error("Error generating frequency:", error);
+        alert("Failed to generate frequency. Please try again.");
       }
     }
   };
@@ -209,14 +490,14 @@ const ClassDetails = () => {
            
            if (intervalCount < 3) {
              setTimeout(() => {
-               if (newAudioContext && !newAudioContext.closed) {
+               if (newAudioContext && newAudioContext.state !== "closed") {
                  playOneInterval();
                }
              }, 500); 
            } else {
              setIsPlaying(false);
              setOscillator(null);
-             if (newAudioContext && !newAudioContext.closed) {
+             if (newAudioContext && newAudioContext.state !== "closed") {
                newAudioContext.close();
                setAudioContext(null);
              }
@@ -231,7 +512,7 @@ const ClassDetails = () => {
          if (oscillator.stop) oscillator.stop();
          if (oscillator.disconnect) oscillator.disconnect();
        }
-       if (audioContext) {
+       if (audioContext && audioContext.state !== "closed") {
          if (audioContext.close) audioContext.close();
        }
        setAudioContext(null);
@@ -246,7 +527,7 @@ const ClassDetails = () => {
       if (oscillator.stop) oscillator.stop();
       if (oscillator.disconnect) oscillator.disconnect();
     }
-    if (audioContext) {
+    if (audioContext && audioContext.state !== "closed") {
       if (audioContext.close) audioContext.close();
     }
     setAudioContext(null);
@@ -255,7 +536,7 @@ const ClassDetails = () => {
     setShowFrequencyPopup(false);
   };
 
-  // UPDATED: Save attendance for the current day's session
+  // Updated to save attendance and end the session
   const saveAttendance = async () => {
     if (!currentClass?._id || !currentSessionType || Object.keys(currentDailyAttendance).length === 0 || attendanceSaving) return;
     const currentClassId = currentClass._id;
@@ -269,20 +550,241 @@ const ClassDetails = () => {
             studentId,
             status,
         })),
-        recordedBy: user._id,
+      recordedBy: user.user._id,
+      markCompleted: true // Add flag to indicate this session is done
     };
 
     dispatch(saveDailyAttendance(attendanceDataForThunk))
         .unwrap()
         .then((result) => {
+        // Check if attendance was already recorded
+        if (result.alreadyRecorded) {
+          // If already recorded, update the UI to show existing records
+          if (result.data && result.data.attendanceRecords) {
+            const existingAttendance = {};
+            // Convert the existing attendance records to the format our UI expects
+            result.data.attendanceRecords.forEach(record => {
+              existingAttendance[record.studentId._id || record.studentId] = record.status;
+            });
+            
+            // Update the UI with the existing records
+            setCurrentDailyAttendance(existingAttendance);
+            
+            // Reload the sortedStudentList with the existing data
+            if (currentClass?.studentList) {
+              sortStudentList(currentClass.studentList, existingAttendance);
+            }
+            
+            // Show a less alarming message - attendance exists but we'll show it
+            alert('Attendance records for this date already exist. Showing existing records.');
+          }
+        } else {
+          // Standard success case - we saved new attendance
             alert('Attendance saved successfully!');
-            handleCancelAttendanceProcess();
-            // Consider re-fetching class details here for consistency
-            // dispatch(fetchClassDetails(id));
+          
+          // Check if there's an active record for today that might have another session to complete
+          const today = new Date().toISOString().split('T')[0];
+          const todayRecord = currentClass.attendanceRecords?.find(record => {
+            const recordDate = new Date(record.date).toISOString().split('T')[0];
+            return recordDate === today;
+          });
+          
+          const hasCompletedBoth = 
+            todayRecord && 
+            (todayRecord.lecture && todayRecord.lecture.length > 0) && 
+            (todayRecord.lab && todayRecord.lab.length > 0);
+          
+          if (hasCompletedBoth) {
+            // If both sessions are recorded, reset UI state completely
+            setIsMarkingMode(false);
+            setIsSelectingType(false);
+            setCurrentSessionType(null);
+            setCurrentDailyAttendance({});
+          } else {
+            // If we've just recorded one type, check if we should offer the other
+            const otherType = currentSessionType === 'lecture' ? 'lab' : 'lecture';
+            
+            // Only prompt if the other session hasn't been marked yet
+            const hasOtherSession = todayRecord && todayRecord[otherType] && todayRecord[otherType].length > 0;
+            
+            if (!hasOtherSession) {
+              const shouldContinue = confirm(`Would you like to mark attendance for ${otherType} session now?`);
+              
+              if (shouldContinue) {
+                // Start marking the other session type
+                setCurrentSessionType(otherType);
+                setIsMarkingMode(true);
+                setIsSelectingType(false);
+                setCurrentDailyAttendance({});
+                
+                // Initialize with empty attendance
+                if (currentClass?.studentList) {
+                  const initialAttendance = {};
+                  currentClass.studentList.forEach(student => {
+                    initialAttendance[student._id] = "absent";
+                  });
+                  setCurrentDailyAttendance(initialAttendance);
+                  sortStudentList(currentClass.studentList, initialAttendance);
+                }
+              } else {
+                // User declined, reset UI state
+                setIsMarkingMode(false);
+                setIsSelectingType(false);
+                setCurrentSessionType(null);
+                setCurrentDailyAttendance({});
+              }
+            } else {
+              // Reset UI state
+              setIsMarkingMode(false);
+              setIsSelectingType(false);
+              setCurrentSessionType(null);
+              setCurrentDailyAttendance({});
+            }
+          }
+          
+          // Refresh class details to get the latest data
+          dispatch(fetchClassDetails(id));
+        }
         })
         .catch((err) => {
             alert(`Failed to save attendance: ${err.message || 'Unknown error'}`);
         });
+  };
+
+  // Add this helper function to determine if we have an active record for today
+  const hasTodayActiveRecord = () => {
+    if (!currentClass?.attendanceRecords) return false;
+    
+    const today = new Date().toISOString().split('T')[0];
+    return currentClass.attendanceRecords.some(record => {
+      const recordDate = new Date(record.date).toISOString().split('T')[0];
+      return recordDate === today && record.active;
+    });
+  };
+
+  // Render the student attendance status with online indicator
+  const renderStudentAttendanceStatus = (student, index) => {
+    const isConnected = connectedStudents.has(student._id);
+    const hasMarkedAttendance = realTimeAttendance[student._id]?.status === 'present';
+    
+    // Determine final status - giving priority to real-time updates
+    const studentStatus = realTimeAttendance[student._id]?.status || currentDailyAttendance[student._id] || 'absent';
+    
+    return (
+      <div key={student._id} className={`flex items-center justify-between p-5 gap-5 ${
+        isDarkMode 
+          ? index % 2 === 0 ? 'bg-gray-800' : 'bg-gray-800/60' 
+          : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/60'
+      }`}>
+        <div className="flex-grow min-w-0">
+          <div className="flex items-center">
+            <p className={`text-base font-medium truncate ${isDarkMode ? 'text-gray-100' : 'text-gray-800'}`}>
+              {student.fullName}
+            </p>
+            
+            {/* Online indicator */}
+            {isConnected && (
+              <span className="ml-2 h-2 w-2 rounded-full bg-green-500"></span>
+            )}
+            
+            {/* Real-time attendance indicator */}
+            {hasMarkedAttendance && (
+              <span className={`ml-2 text-xs px-1.5 py-0.5 rounded ${
+                isDarkMode ? 'bg-green-800 text-green-200' : 'bg-green-100 text-green-800'
+              }`}>
+                Marked
+              </span>
+            )}
+          </div>
+          <p className={`text-sm truncate ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{student.email}</p>
+        </div>
+        <div className="flex space-x-3 flex-shrink-0">
+          <button
+            type="button"
+            className={`px-4 h-9 rounded-md text-sm font-medium border transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-1 ${
+              studentStatus === 'present'
+                ? 'bg-green-600 text-white border-green-600 focus:ring-green-500 shadow-sm'
+                : isDarkMode 
+                  ? 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600 focus:ring-green-500'
+                  : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-100 focus:ring-green-500'
+            } ${isDarkMode ? 'focus:ring-offset-gray-800' : 'focus:ring-offset-white'}`}
+            onClick={() => handleAttendanceChange(student._id, 'present')}
+          >
+            Present
+          </button>
+          <button
+            type="button"
+            className={`px-4 h-9 rounded-md text-sm font-medium border transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-1 ${
+              studentStatus === 'absent'
+                ? 'bg-red-600 text-white border-red-600 focus:ring-red-500 shadow-sm'
+                : isDarkMode 
+                  ? 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600 focus:ring-red-500'
+                  : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-100 focus:ring-red-500'
+            } ${isDarkMode ? 'focus:ring-offset-gray-800' : 'focus:ring-offset-white'}`}
+            onClick={() => handleAttendanceChange(student._id, 'absent')}
+            disabled={realTimeAttendance[student._id]?.status === 'present'}
+          >
+            Absent
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  // Add a helper function to render attendance statistics
+  const renderAttendanceStats = () => {
+    if (!currentClass?.studentList?.length) return null;
+    
+    const totalStudents = currentClass.studentList.length;
+    const presentCount = Object.values(currentDailyAttendance).filter(status => 
+      status === 'present'
+    ).length;
+    
+    // Also check real-time attendance for students who may have marked themselves present
+    const realTimePresentCount = Object.values(realTimeAttendance)
+      .filter(data => data?.status === 'present' && data?.sessionType === currentSessionType)
+      .length;
+    
+    // Use the higher count (in case some students are in both)
+    const finalPresentCount = Math.max(presentCount, realTimePresentCount);
+    const absentCount = totalStudents - finalPresentCount;
+    const attendancePercentage = totalStudents > 0 ? Math.round((finalPresentCount / totalStudents) * 100) : 0;
+    
+    return (
+      <div className={`px-6 py-4 border-b ${
+        isDarkMode 
+          ? 'bg-gray-700/30 border-gray-700' 
+          : 'bg-gray-100/50 border-gray-200'
+      }`}>
+        <div className="flex flex-wrap justify-between items-center">
+          <div className="mb-2 sm:mb-0">
+            <h3 className={`text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+              Attendance Progress
+            </h3>
+            <div className="flex items-center gap-3 mt-1">
+              <div className={`text-sm ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>
+                <span className="font-medium">{finalPresentCount}</span> Present
+              </div>
+              <div className={`text-sm ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>
+                <span className="font-medium">{absentCount}</span> Absent
+              </div>
+            </div>
+          </div>
+          
+          <div>
+            <div className="w-32 h-2.5 bg-gray-200 rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-green-500" 
+                style={{ width: `${attendancePercentage}%` }}
+              ></div>
+            </div>
+            <p className={`text-xs mt-1 text-right ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+              {attendancePercentage}% marked
+            </p>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   // --- Render Logic ---
@@ -338,14 +840,20 @@ const ClassDetails = () => {
             : 'bg-white border-gray-200'
         }`}>
           {/* State 1: Initial View - Show "Start" button */}
-          {!isSelectingType && !isMarkingMode && (
+          {!isSelectingType && !isMarkingMode && !hasActiveSession && (
             <div className="p-8 sm:p-10 text-center">
-                <h2 className={`text-xl font-semibold mb-6 ${isDarkMode ? 'text-gray-100' : 'text-gray-800'}`}>Ready to mark attendance?</h2>
+              <h2 className={`text-xl font-semibold mb-6 ${isDarkMode ? 'text-gray-100' : 'text-gray-800'}`}>
+                {hasTodayActiveRecord() 
+                  ? "Continue marking today's attendance" 
+                  : "Ready to mark attendance?"}
+              </h2>
                 <button
-                  onClick={handleInitiateAttendance} // Calls the first step handler
-                  className={`bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-8 rounded-lg shadow hover:shadow-lg transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 text-base ${isDarkMode ? 'focus:ring-offset-gray-800' : 'focus:ring-offset-white'}`}
+                onClick={handleInitiateAttendance}
+                className={`bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-8 rounded-lg shadow hover:shadow-lg transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 text-base ${isDarkMode ? 'focus:ring-offset-gray-800' : 'focus:ring-offset-white'}`}
                 >
-                  Start Today's Attendance
+                {hasTodayActiveRecord() 
+                  ? "Continue Attendance" 
+                  : "Start Today's Attendance"}
                 </button>
             </div>
           )}
@@ -413,53 +921,15 @@ const ClassDetails = () => {
                   </button>
               </div>
 
+              {/* Attendance Statistics */}
+              {renderAttendanceStats()}
+
               {/* Student List - Use sortedStudentList for rendering */}
               <div className={`divide-y ${isDarkMode ? 'divide-gray-700' : 'divide-gray-200'}`}>
-                {/* ** NOTE: Real-time updates from student actions require WebSockets or polling ** */}
                 {sortedStudentList.length > 0 ? (
-                    // <<< Use sortedStudentList >>>
-                    sortedStudentList.map((student, index) => (
-                        <div key={student._id} className={`flex items-center justify-between p-5 gap-5 ${
-                          isDarkMode 
-                            ? index % 2 === 0 ? 'bg-gray-800' : 'bg-gray-800/60' 
-                            : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/60'
-                        }`}>
-                            <div className="flex-grow min-w-0">
-                                <p className={`text-base font-medium truncate ${isDarkMode ? 'text-gray-100' : 'text-gray-800'}`}>{student.fullName}</p>
-                                <p className={`text-sm truncate ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{student.email}</p>
-                            </div>
-                            <div className="flex space-x-3 flex-shrink-0">
-                                <button
-                                    type="button"
-                                    className={`px-4 h-9 rounded-md text-sm font-medium border transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-1 ${
-                                        currentDailyAttendance[student._id] === 'present'
-                                            ? 'bg-green-600 text-white border-green-600 focus:ring-green-500 shadow-sm'
-                                            : isDarkMode 
-                                              ? 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600 focus:ring-green-500'
-                                              : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-100 focus:ring-green-500'
-                                    } ${isDarkMode ? 'focus:ring-offset-gray-800' : 'focus:ring-offset-white'}`}
-                                    onClick={() => handleAttendanceChange(student._id, 'present')}
-                                >
-                                    Present
-                                </button>
-                                <button
-                                    type="button"
-                                    className={`px-4 h-9 rounded-md text-sm font-medium border transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-1 ${
-                                        currentDailyAttendance[student._id] === 'absent'
-                                            ? 'bg-red-600 text-white border-red-600 focus:ring-red-500 shadow-sm'
-                                            : isDarkMode 
-                                              ? 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600 focus:ring-red-500'
-                                              : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-100 focus:ring-red-500'
-                                    } ${isDarkMode ? 'focus:ring-offset-gray-800' : 'focus:ring-offset-white'}`}
-                                    onClick={() => handleAttendanceChange(student._id, 'absent')}
-                                >
-                                    Absent
-                                </button>
-                            </div>
-                        </div>
-                    ))
+                  sortedStudentList.map((student, index) => renderStudentAttendanceStatus(student, index))
                 ) : (
-                    <p className={`text-center py-8 px-5 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>No students enrolled in this class.</p>
+                  <p className={`text-center py-8 px-5 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>No students enrolled in this class.</p>
                 )}
               </div>
 
@@ -495,9 +965,17 @@ const ClassDetails = () => {
                     </button>
                   </div>
               )}
-              {/* Display specific save error */}
+              {/* Display specific save error or info message */}
               {attendanceError && (
-                  <p className={`text-sm text-center pt-3 px-6 ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>Error: {attendanceError}</p>
+                  <p className={`text-sm text-center pt-3 px-6 ${
+                    attendanceError.includes('already been recorded') 
+                      ? isDarkMode ? 'text-blue-400' : 'text-blue-600' 
+                      : isDarkMode ? 'text-red-400' : 'text-red-600'
+                  }`}>
+                    {attendanceError.includes('already been recorded') 
+                      ? 'Viewing existing attendance records' 
+                      : `Error: ${attendanceError}`}
+                  </p>
               )}
             </div>
           )}
@@ -597,7 +1075,6 @@ const ClassDetails = () => {
              </div>
            </div>
          )}
-
       </div>
     </div>
   );

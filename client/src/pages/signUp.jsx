@@ -115,7 +115,7 @@ const Signup = () => {
             <div className="bg-indigo-500 h-7 w-7 rounded-full"></div>
           </div>
         </div>
-        
+
         {/* Content */}
         <div className="flex-1">
           <h1 className={`text-3xl font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
@@ -133,7 +133,7 @@ const Signup = () => {
               {signupApiError}
             </div>
           )}
-          
+
           {/* Display success message */}
           {submitSuccess && (
             <div className={`p-3 rounded-md mb-4 ${
@@ -142,7 +142,7 @@ const Signup = () => {
               Account created successfully! Redirecting to login...
             </div>
           )}
-          
+
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Phone input */}
             <div className={`relative rounded-md ${isDarkMode ? 'bg-gray-800' : 'bg-gray-200'}`}>
@@ -227,7 +227,7 @@ const Signup = () => {
               />
               <div 
                 className="absolute inset-y-0 right-0 pr-3 flex items-center cursor-pointer"
-                onClick={() => setShowPassword(!showPassword)}
+              onClick={() => setShowPassword(!showPassword)}
               >
                 {showPassword ? 
                   <FiEyeOff className="text-gray-500" /> : 
@@ -267,35 +267,35 @@ const Signup = () => {
                     : isDarkMode ? 'text-gray-300' : 'text-gray-700'
                 }`}
               >
-                <input 
-                  type="radio" 
-                  name="role" 
+                  <input
+                    type="radio"
+                    name="role"
                   value="teacher" 
                   checked={formData.role === 'teacher'} 
-                  onChange={handleChange} 
-                  className="sr-only"
-                />
+                    onChange={handleChange}
+                    className="sr-only"
+                  />
                 Teacher
-              </label>
-            </div>
-            
+                </label>
+          </div>
+
             {/* Create button */}
             <div className="relative mt-6">
-              <button
-                type="submit"
+            <button
+              type="submit"
                 disabled={signupLoading}
                 className={`w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 px-6 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors ${
                   signupLoading ? 'opacity-70 cursor-not-allowed' : ''
                 }`}
               >
                 {signupLoading ? 'Creating Account...' : 'Create Account'}
-              </button>
+            </button>
               <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-white">
                 <FiArrowRight size={20} />
               </div>
-            </div>
-          </form>
-          
+          </div>
+        </form>
+
           {/* Login link */}
           <div className="mt-8 text-center">
             <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
@@ -303,7 +303,7 @@ const Signup = () => {
             </p>
             <Link to="/login" className={`font-medium ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
               Login
-            </Link>
+          </Link>
           </div>
         </div>
         

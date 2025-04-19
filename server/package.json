@@ -26,6 +26,7 @@
     "nodemailer": "^6.10.0",
     "nodemon": "^3.1.9",
     "server": "file:",
+    "socket.io": "^4.7.2",
     "twilio": "^5.4.5"
   }
 }

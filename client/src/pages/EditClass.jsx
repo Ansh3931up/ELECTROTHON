@@ -59,7 +59,7 @@ const EditClass = () => {
     const { currentClass, loading, error } = useSelector((state) => state.class);
     // Log moved inside useEffect where currentClass is guaranteed to be potentially populated
     const user = useSelector((state) => state.auth.user);
-    
+
 
     // --- Initialize State with Defaults ---
     const [formData, setFormData] = useState({
@@ -263,21 +263,21 @@ const EditClass = () => {
                 {/* Render form only when not loading AND currentClass exists */}
                 {!loading && currentClass ? (
                    <form onSubmit={handleSubmit} className={`p-6 sm:p-8 rounded-lg shadow-md border space-y-6 ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
-                        {/* Class Name */}
-                        <div>
+                    {/* Class Name */}
+                    <div>
                             <label htmlFor="className" className={labelClass}>Class Name <span className="text-red-500">*</span></label>
-                            <input
-                                type="text"
-                                id="className"
-                                name="className"
-                                value={formData.className}
-                                onChange={handleChange}
-                                required
-                                minLength="3"
-                                maxLength="50"
+                        <input
+                            type="text"
+                            id="className"
+                            name="className"
+                            value={formData.className}
+                            onChange={handleChange}
+                            required
+                            minLength="3"
+                            maxLength="50"
                                 className={`${inputBaseClass} ${isDarkMode ? inputDarkClass : inputLightClass}`}
-                            />
-                        </div>
+                        />
+                    </div>
 
                         {/* Schedule Section */}
                         <fieldset className={`border rounded-lg p-4 pt-2 space-y-4 ${isDarkMode ? 'border-gray-600' : 'border-gray-300'}`}>
@@ -293,17 +293,17 @@ const EditClass = () => {
                                         <p className={`text-sm ${isDarkMode ? 'text-blue-300' : 'text-blue-800'}`}>
                                             <span className="font-medium">{slot.day}:</span> {slot.timing.join(', ')}
                                         </p>
-                                        <button
-                                            type="button"
+                                                        <button
+                                                            type="button"
                                             onClick={() => handleRemoveScheduleSlot(slot.day)}
                                             className={`p-0.5 rounded ${isDarkMode ? 'text-red-400 hover:bg-red-900/50' : 'text-red-500 hover:bg-red-100'}`}
                                             aria-label={`Remove ${slot.day} schedule`}
                                         >
                                             <FiX size={16} />
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
 
                             {/* Inputs to Add a New Schedule Slot */}
                             <div className="flex flex-col sm:flex-row gap-3 items-end">
@@ -325,32 +325,32 @@ const EditClass = () => {
                                         className={`${inputBaseClass} ${isDarkMode ? inputDarkClass : inputLightClass}`}
                                     />
                                     <p className={`text-xs mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Comma-separated, 24h format</p>
-                                </div>
+                         </div>
                                 <button
                                     type="button" onClick={handleAddScheduleSlot}
                                     className={`w-full sm:w-auto px-3 py-2 text-sm font-medium rounded-md transition-all shadow-sm flex items-center justify-center gap-1 ${isDarkMode ? 'bg-indigo-600 hover:bg-indigo-700 text-white focus:ring-indigo-500' : 'bg-indigo-500 hover:bg-indigo-600 text-white focus:ring-indigo-500'}`} >
                                     <FiPlus size={16}/> Add/Update Day
                                 </button>
-                            </div>
+                    </div>
                             {scheduleEditError && <p className={`text-xs mt-2 ${isDarkMode ? 'text-red-400' : 'text-red-500'}`}>{scheduleEditError}</p>}
                         </fieldset>
 
-                        {/* Batch */}
-                        <div>
+                    {/* Batch */}
+                    <div>
                             <label htmlFor="batch" className={labelClass}>Batch <span className="text-red-500">*</span></label>
-                            <input
-                                type="text"
-                                id="batch"
-                                name="batch"
-                                value={formData.batch}
-                                onChange={handleChange}
-                                required
+                        <input
+                            type="text"
+                            id="batch"
+                            name="batch"
+                            value={formData.batch}
+                            onChange={handleChange}
+                            required
                                 placeholder="Enter 4-digit year (e.g., 2024)"
                                 maxLength="4"
                                 pattern="\d{4}" // HTML5 pattern validation
                                 className={`${inputBaseClass} ${isDarkMode ? inputDarkClass : inputLightClass}`}
-                            />
-                        </div>
+                        />
+                    </div>
 
                         {/* Status Dropdown */}
                         <div>
@@ -371,30 +371,30 @@ const EditClass = () => {
                                     ))}
                                 </select>
                             </div>
-                        </div>
+                    </div>
 
-                        {/* Submit Error */}
+                    {/* Submit Error */}
                         {submitError && <p className={`text-sm font-medium text-center p-2 rounded ${isDarkMode ? 'text-red-300 bg-red-900/40' : 'text-red-600 bg-red-100'}`}>{submitError}</p>}
 
-                        {/* Submit Button */}
+                    {/* Submit Button */}
                         <div className="pt-4 border-t ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}">
-                            <button
-                                type="submit"
+                         <button
+                            type="submit"
                                 disabled={isSubmitting || loading}
                                 className={`w-full flex justify-center items-center gap-2 px-6 py-2.5 font-semibold rounded-md shadow-sm transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed ${
                                     isDarkMode
                                     ? 'bg-green-600 hover:bg-green-700 text-white focus:ring-offset-gray-800'
                                     : 'bg-green-600 hover:bg-green-700 text-white focus:ring-offset-white'
                                 }`}
-                            >
-                                {isSubmitting ? (
-                                    <> <FiLoader className="animate-spin h-5 w-5"/> Updating... </>
-                                ) : (
-                                    <> <FiSave className="h-5 w-5"/> Save Changes </>
-                                )}
-                            </button>
-                        </div>
-                    </form>
+                         >
+                            {isSubmitting ? (
+                                <> <FiLoader className="animate-spin h-5 w-5"/> Updating... </>
+                             ) : (
+                                <> <FiSave className="h-5 w-5"/> Save Changes </>
+                             )}
+                        </button>
+                    </div>
+                </form>
                  ) : (
                      // Optional: Display loading indicator or different message while form is not ready
                      !error && <Loading /> // Show loading spinner if not error and form not ready

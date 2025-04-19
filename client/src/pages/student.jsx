@@ -10,6 +10,7 @@ import detectSound from "../helpers/detectSound";
 import { getfrequencyByClassId,getStudentClasses, markStudentPresentByFrequency } from "../redux/slices/classSlice";
 import { checkAndRequestPermissions, checkDeviceCapabilities } from '../utils/permissions';
 import { smsReceiver } from "../utils/smsReceiver";
+import { getSocket, initializeSocket, joinClassRoom, leaveClassRoom, markAttendance } from "../utils/socket";
 
 // Format schedule array into readable string
 const formatSchedule = (schedule) => {
@@ -75,11 +76,36 @@ const Student = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
 
+  // State for real-time notifications
+  const [notifications, setNotifications] = useState([]);
+  const [socketConnected, setSocketConnected] = useState(false);
+
   useEffect(() => {
     if (user?.user?._id) {
       console.log("Dispatching getStudentClasses with ID:", user.user._id);
       dispatch(getStudentClasses(user.user._id));
+      
+      // Initialize socket connection
+      const socket = initializeSocket(user);
+      if (socket) {
+        socket.on('connect', () => {
+          setSocketConnected(true);
+        });
+        
+        socket.on('disconnect', () => {
+          setSocketConnected(false);
+        });
+      }
     }
+    
+    // Cleanup function
+    return () => {
+      const socket = getSocket();
+      if (socket) {
+        socket.off('connect');
+        socket.off('disconnect');
+      }
+    };
   }, [dispatch, user?.user?._id]);
 
   useEffect(() => {
@@ -158,6 +184,71 @@ const Student = () => {
     }
   }, [isOffline, selectedClassId]);
 
+  // Join class room when a class is selected
+  useEffect(() => {
+    if (selectedClassId && user?.user?._id) {
+      joinClassRoom(selectedClassId, user.user._id);
+      
+      // Setup socket event listeners
+      const socket = getSocket();
+      
+      socket.on('attendanceStarted', (data) => {
+        if (data.classId === selectedClassId) {
+          console.log("Received attendance notification:", data);
+          // Add notification
+          const classObj = classes?.find(cls => cls._id === data.classId);
+          setNotifications(prev => [
+            {
+              id: Date.now(),
+              type: 'attendance',
+              message: `Attendance started for ${classObj?.className || 'class'}`,
+              data,
+              timestamp: new Date().toISOString(),
+            },
+            ...prev.slice(0, 9) // Keep only the last 10 notifications
+          ]);
+          
+          // Automatically update frequency
+          setClassFrequencies(prev => ({
+            ...prev,
+            [selectedClassId]: data.frequency
+          }));
+          
+          setStatus("Attendance started! Ready to mark your presence.");
+          
+          // Play notification sound
+          const audio = new Audio('/notification.mp3');
+          audio.play().catch(e => console.log("Error playing sound", e));
+          
+          // Auto-start frequency detection if requested by teacher
+          if (data.autoDetect && hasPermissions && 
+              deviceCapabilities.hasMicrophone && deviceCapabilities.hasCamera) {
+            // Show a prominent notification to the user
+            if ('Notification' in window && Notification.permission === 'granted') {
+              new Notification(`Attendance Check: ${classObj?.className || 'Your class'}`, {
+                body: 'Automatic attendance verification starting...',
+                icon: '/favicon.ico'
+              });
+            }
+            
+            // Small delay before starting detection
+            setTimeout(() => {
+              handleStartListening(selectedClassId);
+            }, 1500);
+          }
+        }
+      });
+      
+      // Cleanup when selected class changes
+      return () => {
+        if (selectedClassId) {
+          leaveClassRoom(selectedClassId, user.user._id);
+        }
+        socket.off('attendanceStarted');
+      };
+    }
+  }, [selectedClassId, user?.user?._id, classes, hasPermissions, deviceCapabilities]);
+
   const handleOfflineModeChange = async (offline) => {
     setIsOffline(offline);
     if (offline) {
@@ -205,22 +296,45 @@ const Student = () => {
 
   const handleStartListening = async (classId) => {
     if (!hasPermissions) {
-       setStatus("Microphone/Camera permissions needed.");
-       return;
+      setStatus("Microphone/Camera permissions needed.");
+      return;
     }
+    
+    if (!classId) {
+      setStatus("Please select a class first");
+      return;
+    }
+    
     if (!classFrequencies[classId] || classFrequencies[classId].length === 0) {
       setStatus("No frequency available for this class.");
       return;
     }
+    
     if (!user?.user?._id) {
-        setStatus("User information not available.");
-        return;
+      setStatus("User information not available.");
+      return;
     }
-
+    
+    // Check if there's an active attendance session for this class
+    const selectedClass = classes.find(c => c._id === classId);
+    if (!selectedClass) {
+      setStatus("Class not found");
+      return;
+    }
+    
+    // Get the active session type if available
+    const isActiveSession = selectedClass.activeAttendanceSession?.isActive || false;
+    const activeSessionType = selectedClass.activeAttendanceSession?.sessionType || 'lecture';
+    
+    if (!isActiveSession) {
+      setStatus("No active attendance session for this class. Wait for teacher to start attendance.");
+      return;
+    }
+    
+    setStatus(`Starting detection for ${activeSessionType} attendance...`);
     setLoadingStates(prev => ({ ...prev, listening: true }));
-    setStatus("Detecting frequency...");
     setSelectedClassId(classId);
-
+    
     try {
       const storedFrequency = classFrequencies[classId];
       console.log("Using stored frequency for detection:", storedFrequency);
@@ -233,19 +347,35 @@ const Student = () => {
 
           if (isDetected) {
             setStatus("Frequency detected! Marking attendance...");
+            
+            // Emit socket event for real-time update with the correct session type
+            const marked = markAttendance(
+              classId, 
+              user.user._id, 
+              user.user.fullName || user.user.email,
+              'present',
+              activeSessionType // Use the active session type
+            );
+            
+            if (!marked) {
+              setStatus("Failed to emit real-time attendance update. Will still try to record via API.");
+            }
+            
+            // Also save via API
             dispatch(markStudentPresentByFrequency({
-                classId: classId,
-                studentId: user?.user?._id,
-                detectedFrequency: detectedFreqValue || storedFrequency[0]
+              classId: classId,
+              studentId: user.user._id,
+              detectedFrequency: detectedFreqValue || storedFrequency[0],
+              sessionType: activeSessionType // Include session type in API call
             }))
             .unwrap()
             .then(result => {
-                setStatus("Attendance marked successfully! ✅");
-                console.log("Marking success:", result);
+              setStatus(`Attendance for ${activeSessionType} marked successfully! ✅`);
+              console.log("Marking success:", result);
             })
             .catch(err => {
-                 setStatus(`Failed to mark attendance: ${err || 'Unknown error'}`);
-                 console.error("Marking error:", err);
+              setStatus(`Failed to mark attendance: ${err || 'Unknown error'}`);
+              console.error("Marking error:", err);
             });
           } else {
             setStatus("Frequency detection failed. Please ensure you are in the right place.");
@@ -479,6 +609,48 @@ const Student = () => {
                {searchQuery ? 'No classes match your search.' : 'You are not enrolled in any classes.'}
              </p>
          )}
+
+        {/* Socket connection indicator */}
+        {socketConnected ? (
+          <div className={`fixed right-4 bottom-24 p-1 rounded-full ${isDarkMode ? 'bg-green-800' : 'bg-green-500'}`}>
+            <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+          </div>
+        ) : (
+          <div className={`fixed right-4 bottom-24 p-1 rounded-full ${isDarkMode ? 'bg-red-800' : 'bg-red-500'}`}>
+            <div className="w-2 h-2 rounded-full bg-red-400" />
+          </div>
+        )}
+        
+        {/* Notifications */}
+        {notifications.length > 0 && (
+          <div className={`mb-4 overflow-hidden rounded-lg border ${
+            isDarkMode ? 'bg-indigo-900/30 border-indigo-700' : 'bg-indigo-50 border-indigo-300'
+          }`}>
+            <div className={`px-4 py-3 ${
+              isDarkMode ? 'bg-indigo-800/50 border-b border-indigo-700' : 'bg-indigo-100 border-b border-indigo-200'
+            }`}>
+              <h3 className={`text-sm font-medium ${isDarkMode ? 'text-indigo-200' : 'text-indigo-800'}`}>
+                Notifications
+              </h3>
+            </div>
+            <div className="p-2 max-h-40 overflow-y-auto">
+              {notifications.map(notification => (
+                <div key={notification.id} className={`p-2 mb-2 rounded ${
+                  isDarkMode 
+                    ? 'bg-indigo-800/50 border border-indigo-700' 
+                    : 'bg-white border border-indigo-200'
+                }`}>
+                  <p className={`text-sm ${isDarkMode ? 'text-indigo-200' : 'text-indigo-800'}`}>
+                    {notification.message}
+                  </p>
+                  <p className={`text-xs ${isDarkMode ? 'text-indigo-300/70' : 'text-indigo-500'}`}>
+                    {new Date(notification.timestamp).toLocaleTimeString()}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
       <BottomNavBar user={user} />
     </div>
