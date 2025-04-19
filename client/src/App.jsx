@@ -1,128 +1,111 @@
 import "./App.css";
 
 import PropTypes from 'prop-types';
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Outlet, Route, Routes } from "react-router-dom";
 
-// Import the animation component
-import BackgroundAnimation from "./components/BackgroundAnimation";
-import { useTheme } from "./context/ThemeContext";
+import BackgroundAnimation from './components/BackgroundAnimation';
+// Page Imports
 import ClassDetails from './pages/ClassDetails';
 import EditClass from './pages/EditClass';
-import Home from "./pages/Home.jsx";
-import Login from "./pages/login.jsx";
-import Signup from "./pages/signUp.jsx";
-import Student from "./pages/student.jsx";
-import Teacher from "./pages/teacher.jsx";
+import Login from './pages/Login';
+import Signup from './pages/Signup';
+import SignupCheck from './pages/SignupCheck';
+import SplashScreen from './pages/SplashScreen';
+import Student from './pages/Student';
+import Teacher from './pages/Teacher';
 import TeacherTimetable from './pages/TeacherTimetable';
 
+// Protected route component
+const ProtectedRoute = () => {
+  // Check if user is authenticated by looking for token
+  const isAuthenticated = !!localStorage.getItem('token');
+  
+  // If authenticated, render outlet (child routes)
+  // Otherwise, redirect to login
+  return isAuthenticated ? <Outlet /> : <Navigate to="/login" replace />;
+};
+
+// Guest-only route component (for login, signup, splash pages)
+const GuestOnlyRoute = () => {
+  // Check if user is already authenticated
+  const isAuthenticated = !!localStorage.getItem('token');
+  const userRole = localStorage.getItem('userRole');
+  
+  // If authenticated, redirect to appropriate dashboard based on role
+  if (isAuthenticated) {
+    if (userRole === 'teacher') {
+      return <Navigate to="/teacher" replace />;
+    } else if (userRole === 'student') {
+      return <Navigate to="/student" replace />;
+    }
+  }
+  
+  // If not authenticated, allow access to login/signup pages
+  return <Outlet />;
+};
+
+// Role-based route component
+const RoleRoute = ({ allowedRoles }) => {
+  // Get user role from localStorage
+  const userRole = localStorage.getItem('userRole');
+  
+  // If user has an allowed role, render outlet (child routes)
+  // Otherwise, redirect to appropriate dashboard or login
+  if (allowedRoles.includes(userRole)) {
+    return <Outlet />;
+  }
+  
+  // Redirect based on role
+  if (userRole === 'teacher') {
+    return <Navigate to="/teacher" replace />;
+  } else if (userRole === 'student') {
+    return <Navigate to="/student" replace />;
+  }
+  
+  // If no role or invalid role, redirect to login
+  return <Navigate to="/login" replace />;
+};
+
+// PropTypes validation
+RoleRoute.propTypes = {
+  allowedRoles: PropTypes.arrayOf(PropTypes.string).isRequired
+};
+
 function App() {
-  // const { isDarkMode } = useTheme(); // Keep if needed for other things
-
-  // const { user, isAuthenticated } = useSelector((state) => state.auth);
-  // const role = user?.user?.role || user?.role;
-
-  // Function to check if user is authenticated from localStorage
-  const getUserRole = () => {
-    // Get role from localStorage (will be set during login)
-    console.log(localStorage.getItem('userRole'));
-    return localStorage.getItem('userRole');
-  };
-
-  // Protected Route component
-  const ProtectedRoute = ({ children }) => {
-    const role = getUserRole();
-    if (!role) {
-      return <Navigate to="/login" />;
-    }
-
-    // Ensure users can only access their role-specific routes
-    if (window.location.pathname === '/teacher' && role !== 'teacher') {
-      return <Navigate to="/student" />;
-    }
-    if (window.location.pathname === '/student' && role !== 'student') {
-      return <Navigate to="/teacher" />;
-    }
-
-    return children;
-  };
-
-  // Add prop types validation
-  ProtectedRoute.propTypes = {
-    children: PropTypes.node.isRequired,
-  };
-
-  // Role-based redirect after login
-  // const RoleBasedRedirect = () => {
-  //   const role = getUserRole();
-  //   if (role === "teacher") {
-  //     return <Navigate to="/teacher" />;
-  //   } else if (role === "student") {
-  //     return <Navigate to="/student" />;
-  //   }
-  //   return <Navigate to="/login" />;
-  // };
-
   return (
-    // Main container - no background styles needed here for the animation
     <div className="min-h-screen w-full relative">
-      {/* Render the animation component - it will position itself with 'fixed' */}
+      {/* Background Animation - will appear on all pages */}
       <BackgroundAnimation />
-
-      {/* Routes are rendered normally. Their individual backgrounds will show, with bubbles floating over them */}
-      <div className="relative z-0"> {/* Content stays at z-0 */}
+      
+      {/* Main Content */}
+      <div className="relative z-10">
         <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/signup" element={<Signup />} />
-          <Route path="/login" element={<Login />} />
-          <Route
-            path="/teacher/attendance"
-            element={
-              <ProtectedRoute>
-                <Teacher />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/student"
-            element={
-              <ProtectedRoute>
-                <Student />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/teacher"
-            element={
-              <ProtectedRoute>
-                <Teacher />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/class/:classId"
-            element={
-              <ProtectedRoute>
-                <ClassDetails />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/class/:classId/edit"
-            element={
-              <ProtectedRoute>
-                <EditClass />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/timetable"
-            element={
-              <ProtectedRoute>
-                <TeacherTimetable />
-              </ProtectedRoute>
-            }
-          />
-          <Route path="*" element={<Navigate to={getUserRole() ? (getUserRole() === 'teacher' ? '/teacher' : '/student') : '/login'} />} />
+          {/* Public Routes (accessible only to guests/non-logged-in users) */}
+          <Route element={<GuestOnlyRoute />}>
+            <Route path="/" element={<SplashScreen />} />
+            <Route path="/check-signup" element={<SignupCheck />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/signup" element={<Signup />} />
+          </Route>
+          
+          {/* Protected Routes */}
+          <Route element={<ProtectedRoute />}>
+            {/* Teacher Routes */}
+            <Route element={<RoleRoute allowedRoles={["teacher"]} />}>
+              <Route path="/teacher" element={<Teacher />} />
+              <Route path="/teacher-timetable" element={<TeacherTimetable />} />
+              <Route path="/class/:id" element={<ClassDetails />} />
+              <Route path="/edit-class/:id" element={<EditClass />} />
+            </Route>
+            
+            {/* Student Routes */}
+            <Route element={<RoleRoute allowedRoles={["student"]} />}>
+              <Route path="/student" element={<Student />} />
+            </Route>
+          </Route>
+          
+          {/* Fallback route */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
     </div>

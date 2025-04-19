@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { FiChevronLeft, FiLoader, FiSave, FiPlus, FiX } from 'react-icons/fi';
+import { useEffect, useState } from "react";
+import { FiChevronLeft, FiLoader, FiPlus, FiSave, FiX } from 'react-icons/fi';
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, useParams } from "react-router-dom";
 
@@ -49,7 +49,9 @@ const convertScheduleToArray = (scheduleObject) => {
 }
 
 const EditClass = () => {
-    const { classId } = useParams();
+    const { id } = useParams();
+    console.log("classid",id);
+
     const navigate = useNavigate();
     const dispatch = useDispatch();
     const { isDarkMode } = useTheme();
@@ -57,6 +59,7 @@ const EditClass = () => {
     const { currentClass, loading, error } = useSelector((state) => state.class);
     // Log moved inside useEffect where currentClass is guaranteed to be potentially populated
     const user = useSelector((state) => state.auth.user);
+    
 
     // --- Initialize State with Defaults ---
     const [formData, setFormData] = useState({
@@ -77,15 +80,15 @@ const EditClass = () => {
 
     // Fetch class details when component mounts or classId changes
     useEffect(() => {
-        if (classId) {
-            console.log(`[EditClass] Fetching details for classId: ${classId}`);
-            dispatch(fetchClassDetails(classId));
+        if (id) {
+            console.log(`[EditClass] Fetching details for classId: ${id}`);
+            dispatch(fetchClassDetails(id));
         }
         return () => {
             console.log(`[EditClass] Clearing current class data.`);
             dispatch(clearCurrentClass());
         };
-    }, [dispatch, classId]);
+    }, [dispatch, id]);
 
     // Populate form *after* class details have been successfully fetched and loaded into Redux state
     useEffect(() => {
@@ -203,11 +206,11 @@ const EditClass = () => {
             status: formData.status // Send the selected status
         };
 
-        dispatch(editClassDetails({ classId, updates }))
+        dispatch(editClassDetails({ classId: id, updates }))
             .unwrap()
             .then(() => {
                 alert("Class updated successfully!");
-                navigate(`/class/${classId}`); // Navigate back to details page
+                navigate(`/class/${id}`); // Navigate back to details page
             })
             .catch((err) => {
                 const errorMessage = typeof err === 'string' ? err : (err?.message || "Failed to update class.");
@@ -233,7 +236,7 @@ const EditClass = () => {
     if (error) return <div className={`p-6 text-center rounded-md border ${isDarkMode ? 'text-red-300 bg-red-900/50 border-red-700' : 'text-red-500 bg-red-100 border-red-400'}`}>Error loading class details: {error}</div>;
     // Changed condition: Render "not found" only if loading is done and still no currentClass
     if (!loading && !currentClass) return <div className="p-6 text-center text-gray-500">Class not found or you don&apos;t have access.</div>;
-
+  
     // Authorization check only if currentClass exists
     if (currentClass && currentClass.teacherId?._id !== user?.user?._id) {
         return <div className="p-6 text-center text-red-500">You are not authorized to edit this class.</div>;

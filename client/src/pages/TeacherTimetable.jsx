@@ -176,7 +176,7 @@ const TeacherTimetable = () => {
             <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
                 {/* Header and Toggle Buttons */}
                 <div className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4">
-                    <h1 className="text-2xl sm:text-3xl text-white font-bold">My Timetable</h1>
+                    <h1 className={`text-2xl sm:text-3xl ${isDarkMode ? 'text-white' : 'text-gray-900'} font-bold`}>My Timetable</h1>
                     <div className={`flex space-x-2 p-1 rounded-lg border ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-gray-100 border-gray-200'}`}>
                         <button
                             onClick={() => setViewMode('grid')}

@@ -45,6 +45,7 @@ const Teacher = () => {
   // };
 
   const handleClassClick = (cls) => {
+    
     navigate(`/class/${cls._id}`);
   };
   console.log("classes",classes);

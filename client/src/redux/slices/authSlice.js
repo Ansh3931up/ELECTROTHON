@@ -71,7 +71,11 @@ const authSlice = createSlice({
         state.loading = false;
         localStorage.setItem('user', JSON.stringify(action.payload)); // Save the user data
         localStorage.setItem('token', action.payload.token); // Save the token
-        localStorage.setItem('userRole', action.payload.role); // Save the role
+        
+        // Fix: Make sure role is properly stored from the right location in payload
+        const userRole = action.payload.user?.role || action.payload.role;
+        console.log('Setting user role:', userRole); // Debug log
+        localStorage.setItem('userRole', userRole); // Save the role
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.error = action.payload;

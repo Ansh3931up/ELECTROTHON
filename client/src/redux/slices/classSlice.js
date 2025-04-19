@@ -188,6 +188,7 @@ export const editClassDetails = createAsyncThunk(
   // Expects { classId, updates: { className?, schedule?, batch? } }
   async ({ classId, updates }, { rejectWithValue }) => { // Removed teacherId from params
     try {
+      console.log("classId",classId);
       const token = localStorage.getItem("token");
       // Payload is now just the updates object
       const payload = { ...updates }; // Removed teacherId from payload

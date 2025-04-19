@@ -97,8 +97,8 @@ const BottomNavBar = ({ user }) => {
   const handleCreateClass = (e) => {
     e.preventDefault();
     setFormError(''); // Clear previous errors
-
-    if (!user?.user?._id) { // Use direct _id access
+    console.log("user011", user);
+    if (!user?._id) { // Use direct _id access
       console.error("User ID not found in user prop for creating class.");
       setFormError("Authentication error. Please log in again.");
       return;
@@ -159,8 +159,8 @@ const BottomNavBar = ({ user }) => {
   };
   
   const teacherNavItems = [
-    { label: 'Home', path: '/dashboard', icon: <FiHome size={20} /> },
-    { label: 'Classes', path: '/classes', icon: <FiBook size={20} /> },
+    { label: 'Home', path: '/teacher', icon: <FiHome size={20} /> },
+    { label: 'Classes', path: '/teacher', icon: <FiBook size={20} /> },
     { 
       label: 'Add', 
       icon: <FiPlusCircle size={24} />,
@@ -169,15 +169,15 @@ const BottomNavBar = ({ user }) => {
         setFormError(''); // Clear errors when opening modal
       }
     },
-    { label: 'Timetable', path: '/timetable', icon: <FiCalendar size={20} /> },
-    { label: 'Attendence', path: '/teacher/attendance', icon: <FiMenu size={20} />},
+    { label: 'Timetable', path: '/teacher-timetable', icon: <FiCalendar size={20} /> },
+    { label: 'Attendance', path: '/teacher', icon: <FiMenu size={20} />},
   ];
   
   const studentNavItems = [
-    { label: 'Home', path: '/dashboard', icon: <FiHome size={20} /> },
-    { label: 'Classes', path: '/classes', icon: <FiBook size={20} /> },
-    { label: 'Attendance', path: '/attendance', icon: <FiCalendar size={20} /> },
-    { label: 'Profile', path: '/profile', icon: <FiUser size={20} /> },
+    { label: 'Home', path: '/student', icon: <FiHome size={20} /> },
+    { label: 'Classes', path: '/student', icon: <FiBook size={20} /> },
+    { label: 'Attendance', path: '/student', icon: <FiCalendar size={20} /> },
+    { label: 'Profile', path: '/student', icon: <FiUser size={20} /> },
   ];
   
   const bottomNavItems = isTeacher ? teacherNavItems : studentNavItems;

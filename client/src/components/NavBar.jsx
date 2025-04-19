@@ -52,7 +52,25 @@ const NavBar = () => {
       setCurrentPage('Search');
     } else {
       // Extract page name from the path
-      const pageName = path.split('/').pop();
+      const pathSegments = path.split('/').filter(Boolean); // Remove empty segments
+      
+      // If last segment contains ID (has numbers), use previous segment
+      const lastSegment = pathSegments[pathSegments.length - 1];
+      let pageName;
+      
+      if (/\d/.test(lastSegment) && pathSegments.length > 1) {
+        // Last segment has numbers, use second-to-last segment
+        pageName = pathSegments[pathSegments.length - 2];
+        
+        // Map common URL segments to better display names
+        if (pageName === 'class') pageName = 'Class Details';
+        else if (pageName === 'edit-class') pageName = 'Edit Class';
+      } else {
+        // Use last segment as is
+        pageName = lastSegment;
+      }
+      
+      // Capitalize first letter
       setCurrentPage(pageName.charAt(0).toUpperCase() + pageName.slice(1));
     }
   }, [location.pathname]);
@@ -198,8 +216,8 @@ const NavBar = () => {
 
   return (
     <>
-      {/* Top Navbar - Respects isDarkMode */}
-      <nav className={`shadow-lg text-white fixed top-0 left-0 right-0 z-50 rounded-b-sm ${ isDarkMode ? 'bg-gradient-to-r from-gray-800 to-gray-900' : 'bg-gradient-to-r from-[#003065] to-[#002040]' }`}>
+      {/* Top Navbar - Made visible with better contrast */}
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-white/95 dark:bg-transparent backdrop-blur-sm shadow-md dark:shadow-none">
         <div className="max-w-screen-sm mx-auto px-4 py-2.5 flex justify-between items-center">
           {/* Logo and page title */}
           <div className="flex items-center">
@@ -207,15 +225,15 @@ const NavBar = () => {
               className="relative flex items-center group cursor-pointer"
               onClick={handleLogoClick}
             >
-              <div className={`w-8 h-8 flex items-center justify-center overflow-hidden glow-container ${isLogoAnimating ? 'animate-glow glow-active' : ''}`}>
-                <img src={logo} alt="Logo" className="w-full h-full object-contain" />
-              </div>
+              
               <div className="flex flex-col">
                 <h1 className={`text-lg font-medium ml-2.5 tracking-wide ${isLogoAnimating ? 'animate-glow' : ''}`}>
-                  <span className="font-semibold text-white">Neura<span className='text-sky-400'>Campus </span></span>
+                  <span className="font-semibold" style={{ color: isDarkMode ? 'white' : '#0c4a6e' }}>
+                    Neura<span style={{ color: isDarkMode ? '#38bdf8' : '#2563eb' }}>Campus </span>
+                  </span>
                 </h1>
                 {currentPage && (
-                  <span className="text-xs ml-2.5 text-blue-200 font-medium tracking-wider">
+                  <span className="text-xs ml-2.5 font-medium tracking-wider" style={{ color: isDarkMode ? '#bfdbfe' : '#374151' }}>
                     {currentPage}
                   </span>
                 )}
@@ -228,22 +246,16 @@ const NavBar = () => {
             {/* Hamburger menu button */}
             {user ? (
               <button 
-                className="hamburger-btn relative p-2 rounded-full hover:bg-white/10 transition-colors flex items-center justify-center"
+                className="hamburger-btn relative p-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/10 text-black dark:text-white transition-colors flex items-center justify-center"
                 onClick={() => setSidebarOpen(!isSidebarOpen)}
                 aria-label="Toggle menu"
-              >
+                style={{ color: isDarkMode ? '#bfdbfe' : '#374151' }}>
                 <div className="w-5 h-5 relative">
                  <FiAlignRight size={22} />
                  </div>
               </button>
             ) : (
-              <button 
-                onClick={() => navigate('/login')} 
-                className="bg-gradient-to-r from-green-600 to-green-500 px-4 py-1.5 rounded-full text-sm font-medium shadow-md hover:shadow-lg hover:from-green-500 hover:to-green-600 active:scale-95 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-opacity-50 border border-green-400/10"
-                aria-label="Login"
-              >
-                Login
-              </button>
+              <p></p>
             )}
           </div>
         </div>
