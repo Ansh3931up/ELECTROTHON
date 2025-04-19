@@ -114,10 +114,10 @@ const Student = () => {
   const [status, setStatus] = useState("Waiting for attendance notifications...");
   const [selectedClassId, setSelectedClassId] = useState(null);
   const [classFrequencies, setClassFrequencies] = useState({});
-  const [hasPermissions, setHasPermissions] = useState(false);
+  const [hasPermissions, setHasPermissions] = useState(true);
   const [deviceCapabilities, setDeviceCapabilities] = useState({
-    hasMicrophone: false,
-    hasCamera: false
+    hasMicrophone: true,
+    hasCamera: true
   });
   const [isOffline, setIsOffline] = useState(false);
   const [hasSMSPermissions, setHasSMSPermissions] = useState(false);
@@ -284,6 +284,7 @@ const Student = () => {
     
     // Find the class that this notification is for
     const classObj = classes?.find(cls => cls._id === data.classId);
+    console.log("Class object:", classObj);
     if (!classObj) return;
     
     // Add to notifications list
@@ -297,6 +298,7 @@ const Student = () => {
       },
       ...prev.slice(0, 9) // Keep only the last 10 notifications
     ]);
+    console.log("Notifications:", notifications);
     
     // Automatically select this class
     setSelectedClassId(data.classId);
@@ -307,8 +309,12 @@ const Student = () => {
       [data.classId]: data.frequency
     }));
     
+    // Make canvas visible immediately
+    setCanvasVisible(true);
+    
     // Play notification sound
     playNotificationSound();
+    console.log("Starting detection for class:", data.classId, "with frequency:", data.frequency[0], "and sessionType:", data.sessionType);
     
     // Show a prominent notification
     if ('Notification' in window && Notification.permission === 'granted') {
@@ -318,25 +324,28 @@ const Student = () => {
         vibrate: [200, 100, 200]
       });
     }
+    console.log("within the graph 3", hasPermissions, deviceCapabilities.hasMicrophone, deviceCapabilities.hasCamera);
     
-    // Auto-start detection if we have permissions
-    if (hasPermissions && deviceCapabilities.hasMicrophone && deviceCapabilities.hasCamera) {
-      // Update status
-      setStatus(`Starting automatic attendance detection for ${classObj.className}...`);
-      
-      // Start detection with a small delay to allow UI to update
-      setTimeout(() => {
-        startDetection(data.classId, data.frequency, data.sessionType);
-      }, 1000);
-    } else {
-      setStatus("Cannot start automatic detection - missing permissions");
-    }
+    // Always start detection regardless of permission state
+    // Update status
+    console.log("within the graph");
+    setStatus(`Starting automatic attendance detection for ${classObj.className}...`);
+    console.log("within the graph 2");
+    
+    // Start detection immediately - ensure frequency is handled properly
+    const freqToUse = Array.isArray(data.frequency) ? data.frequency : [data.frequency];
+    startDetection(data.classId, freqToUse, data.sessionType);
   };
 
   // Start detection automatically
   const startDetection = async (classId, frequency, sessionType = 'lecture') => {
-    if (!classId || !frequency || !frequency.length || !hasPermissions) {
-      setStatus("Cannot start detection - missing data or permissions");
+    console.log("Starting detection for class:", classId, "with frequency:", frequency, "and sessionType:", sessionType);
+    
+    // Ensure frequency is always in array format
+    const freqArray = Array.isArray(frequency) ? frequency : [frequency];
+    
+    if (!classId || !freqArray || freqArray.length === 0) {
+      setStatus("Cannot start detection - missing data");
       return;
     }
     
@@ -344,7 +353,7 @@ const Student = () => {
     if (
       detectionState.active && 
       detectionState.classId === classId && 
-      JSON.stringify(detectionState.currentFrequency) === JSON.stringify(frequency)
+      JSON.stringify(detectionState.currentFrequency) === JSON.stringify(freqArray)
     ) {
       return;
     }
@@ -372,22 +381,22 @@ const Student = () => {
     // Update detection state
     setDetectionState({
       active: true,
-      currentFrequency: frequency,
+      currentFrequency: freqArray,
       classId
     });
     
     // Update UI
-    setStatus(`Listening for frequency ${frequency.join(', ')} Hz...`);
+    setStatus(`Listening for frequency ${freqArray.join(', ')} Hz...`);
     setLoadingStates(prev => ({ ...prev, listening: true }));
     setCanvasVisible(true);
     
-    console.log(`Starting detection for class ${classId} with frequency ${frequency}`);
+    console.log(`Starting detection for class ${classId} with frequency ${freqArray}`);
     
     try {
       // Use detectSound to listen for the frequency
       const cleanupFn = await detectSound(
         setStatus,
-        frequency,
+        freqArray,
         async (isDetected, detectedFreqValue) => {
           // Update state when detection completes
           setDetectionState(prev => ({ ...prev, active: false }));
@@ -421,7 +430,7 @@ const Student = () => {
               const result = await dispatch(markStudentPresentByFrequency({
                 classId: classId,
                 studentId: user.user._id,
-                detectedFrequency: detectedFreqValue || frequency[0],
+                detectedFrequency: detectedFreqValue || freqArray[0],
                 sessionType: activeSessionType
               })).unwrap();
               
@@ -494,6 +503,36 @@ const Student = () => {
   return (
     <div className={`min-h-screen pb-24 bg-transparent`}>
       <div className="p-4 sm:p-6 max-w-4xl mx-auto">
+        {/* Move Status and Visualization Area to the top for more prominence */}
+        <div className={`mb-6 p-4 rounded-lg ${isDarkMode ? 'bg-gray-800/90' : 'bg-white'} shadow-md ${detectionState.active ? 'border-2 border-blue-500' : ''}`}>
+          <div className="flex items-center justify-center mb-2">
+            {loadingStates.listening && (
+              <div className="mr-2 p-1 bg-green-500 rounded-full animate-pulse">
+                <div className="w-2 h-2 rounded-full bg-white"></div>
+              </div>
+            )}
+            <p className={`text-lg font-semibold text-center ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
+              {status}
+            </p>
+          </div>
+          
+          {/* Canvas for frequency visualization - always reserve space but control opacity */}
+          <div className={`transition-all duration-300 ${canvasVisible ? 'h-48 mb-2 opacity-100' : 'h-0 opacity-0'}`}>
+            <canvas
+              id="frequencyData"
+              className={`w-full h-full rounded-lg ${isDarkMode ? 'bg-black' : 'bg-gray-900'}`}
+            />
+          </div>
+          
+          {/* Help text for auto detection */}
+          {detectionState.active && (
+            <p className={`text-sm text-center mt-2 ${isDarkMode ? 'text-blue-300' : 'text-blue-600'}`}>
+              <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mr-2 animate-pulse"></span>
+              Listening automatically. Keep your device nearby and speaker volume up.
+            </p>
+          )}
+        </div>
+
         {(!deviceCapabilities.hasMicrophone || !deviceCapabilities.hasCamera) && (
           <div className={`border-l-4 p-4 mb-4 rounded-r-md ${getInfoBoxBg('error')}`}>
             <p className="font-bold flex items-center"><FiXCircle className="mr-2"/> Device Error</p>
@@ -618,33 +657,6 @@ const Student = () => {
              <p>Waiting for frequency via SMS. Attendance will be automatic when received.</p>
            </div>
         )}
-
-        {/* Status and Visualization Area */}
-        <div className={`mb-6 p-4 rounded-lg ${isDarkMode ? 'bg-gray-800' : 'bg-white'} shadow-md`}>
-          <div className="flex items-center justify-center mb-2">
-            {loadingStates.listening && (
-              <div className="mr-2 p-1 bg-green-500 rounded-full animate-pulse">
-                <div className="w-2 h-2 rounded-full bg-white"></div>
-              </div>
-            )}
-            <p className={`text-lg font-semibold text-center ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
-              {status}
-            </p>
-          </div>
-          
-          {/* Canvas for frequency visualization - show when needed */}
-          <canvas
-            id="frequencyData"
-            className={`w-full h-48 rounded-lg mt-2 transition-opacity ${isDarkMode ? 'bg-black' : 'bg-gray-900'} ${canvasVisible ? 'opacity-100' : 'opacity-0 h-0 mt-0'}`}
-          />
-          
-          {/* Help text for auto detection */}
-          {detectionState.active && (
-            <p className={`text-xs text-center mt-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-              Listening automatically. Keep your device nearby and speaker volume up.
-            </p>
-          )}
-        </div>
 
         {classLoading && <p className={`text-center py-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Loading classes...</p>}
         {classError && <p className={`text-center py-4 ${getInfoBoxBg('error')} p-3 rounded`}>Error loading classes: {classError}</p>}

@@ -201,8 +201,8 @@ const ClassDetails = () => {
         console.log("Both lecture and lab have been recorded, showing initial state");
         setIsMarkingMode(false);
         setIsSelectingType(false);
-        setCurrentSessionType(null);
-      }
+      setCurrentSessionType(null);
+    }
     } else {
       // No record for today, show initial state
       console.log("No attendance record found for today, showing initial state");
