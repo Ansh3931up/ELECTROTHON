@@ -507,8 +507,8 @@ const Student = () => {
         <div className={`mb-6 p-4 rounded-lg ${isDarkMode ? 'bg-gray-800/90' : 'bg-white'} shadow-md ${detectionState.active ? 'border-2 border-blue-500' : ''}`}>
           <div className="flex items-center justify-center mb-2">
             {loadingStates.listening && (
-              <div className="mr-2 p-1 bg-green-500 rounded-full animate-pulse">
-                <div className="w-2 h-2 rounded-full bg-white"></div>
+              <div className="mr-2 p-1.5 bg-green-500 rounded-full animate-pulse shadow-lg shadow-green-500/30">
+                <div className="w-3 h-3 rounded-full bg-white"></div>
               </div>
             )}
             <p className={`text-lg font-semibold text-center ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
@@ -527,7 +527,7 @@ const Student = () => {
           {/* Help text for auto detection */}
           {detectionState.active && (
             <p className={`text-sm text-center mt-2 ${isDarkMode ? 'text-blue-300' : 'text-blue-600'}`}>
-              <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mr-2 animate-pulse"></span>
+              <span className="inline-block w-3 h-3 bg-green-500 rounded-full mr-2 animate-pulse shadow-sm shadow-green-500/50"></span>
               Listening automatically. Keep your device nearby and speaker volume up.
             </p>
           )}
@@ -652,10 +652,10 @@ const Student = () => {
         )}
 
         {isOffline && hasSMSPermissions && (
-           <div className={`border-l-4 p-4 mb-4 rounded-r-md ${getInfoBoxBg('info')}`}>
-             <p className="font-bold flex items-center"><FiWifiOff className="mr-2"/> Offline Mode Active</p>
-             <p>Waiting for frequency via SMS. Attendance will be automatic when received.</p>
-           </div>
+          <div className={`border-l-4 p-4 mb-4 rounded-r-md ${getInfoBoxBg('info')}`}>
+            <p className="font-bold flex items-center"><FiWifiOff className="mr-2"/> Offline Mode Active</p>
+            <p>Waiting for frequency via SMS. Attendance will be automatic when received.</p>
+          </div>
         )}
 
         {classLoading && <p className={`text-center py-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Loading classes...</p>}
@@ -714,7 +714,7 @@ const Student = () => {
                   {/* Attendance Status Indicator */}
                   {isActiveAttendance && (
                     <div className="mt-2 px-3 py-1.5 rounded-full bg-white/30 backdrop-blur-sm text-xs font-medium inline-flex items-center">
-                      <span className="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></span>
+                      <span className="w-3 h-3 bg-green-400 rounded-full mr-2 animate-pulse shadow-sm shadow-green-400/50"></span>
                       Active {attendanceSessionType} session
                     </div>
                   )}
@@ -763,19 +763,34 @@ const Student = () => {
 
         {/* Socket connection indicator */}
         {socketConnected ? (
-          <div className={`fixed right-4 bottom-24 p-1 rounded-full ${isDarkMode ? 'bg-green-800' : 'bg-green-500'}`} title="Connected to server">
-            <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+          <div className={`fixed right-4 bottom-24 p-1.5 rounded-full shadow-lg ${isDarkMode ? 'bg-green-800 shadow-green-800/30' : 'bg-green-500 shadow-green-500/30'}`} title="Connected to server">
+            <div className="w-3 h-3 rounded-full bg-green-400 animate-pulse" />
           </div>
         ) : (
-          <div className={`fixed right-4 bottom-24 p-1 rounded-full ${isDarkMode ? 'bg-red-800' : 'bg-red-500'}`} title="Disconnected from server">
-            <div className="w-2 h-2 rounded-full bg-red-400" />
+          <div className={`fixed right-4 bottom-24 p-1.5 rounded-full shadow-lg ${isDarkMode ? 'bg-red-800 shadow-red-800/30' : 'bg-red-500 shadow-red-500/30'}`} title="Disconnected from server">
+            <div className="w-3 h-3 rounded-full bg-red-400" />
           </div>
         )}
         
         {/* Active detection indicator */}
         {detectionState.active && (
-          <div className={`fixed left-4 bottom-24 p-1 rounded-full animate-pulse bg-blue-500`} title="Actively detecting frequency">
-            <div className="w-2 h-2 rounded-full bg-blue-200" />
+          <div className={`fixed left-4 bottom-24 p-1.5 rounded-full animate-pulse shadow-lg bg-blue-500 shadow-blue-500/30`} title="Actively detecting frequency">
+            <div className="w-3 h-3 rounded-full bg-blue-200" />
+          </div>
+        )}
+        
+        {/* Floating attendance status indicator */}
+        {detectionState.active && (
+          <div className="fixed top-4 right-4 z-50 flex items-center space-x-2 px-3 py-2 bg-green-500 text-white rounded-full shadow-lg animate-pulse">
+            <span className="w-3 h-3 bg-white rounded-full"></span>
+            <span className="text-xs font-medium">Detecting</span>
+          </div>
+        )}
+        
+        {/* Show when attendance was marked successfully */}
+        {!detectionState.active && status.includes("marked successfully") && (
+          <div className="fixed top-4 right-4 z-50 flex items-center space-x-2 px-3 py-2 bg-green-500 text-white rounded-full shadow-lg">
+            <span className="text-xs font-medium">✓ Present</span>
           </div>
         )}
         
