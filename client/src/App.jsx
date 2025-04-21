@@ -14,15 +14,61 @@ import SplashScreen from './pages/SplashScreen';
 import Student from './pages/Student';
 import Teacher from './pages/Teacher';
 import TeacherTimetable from './pages/TeacherTimetable';
+import FaceRegistration from './pages/FaceRegistration';
 
+
+
+const FaceCheckRoute = () => {
+  // Get user from localStorage
+  const userStr = localStorage.getItem('user');
+  const user = userStr ? JSON.parse(userStr).user : null;
+  const isAuthenticated = !!localStorage.getItem('token');
+  const userRole = localStorage.getItem('userRole');
+  
+  // If user is not authenticated, redirect to login
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+  
+  // If user exists and face verification is not verified, redirect to face registration
+  if (user && (!user.faceData || user.faceData.verificationStatus !== 'verified')) {
+    return <Navigate to="/face-registration" replace />;
+  }
+  
+  // If user is authenticated and face is verified, redirect to dashboard
+  if (userRole === 'teacher') {
+    return <Navigate to="/teacher" replace />;
+  } else if (userRole === 'student') {
+    return <Navigate to="/student" replace />;
+  }
+  
+  // Fallback
+  return <Navigate to="/login" replace />;
+};
+
+  
+  
 // Protected route component
 const ProtectedRoute = () => {
   // Check if user is authenticated by looking for token
   const isAuthenticated = !!localStorage.getItem('token');
   
-  // If authenticated, render outlet (child routes)
-  // Otherwise, redirect to login
-  return isAuthenticated ? <Outlet /> : <Navigate to="/login" replace />;
+  // Get user from localStorage
+  const userStr = localStorage.getItem('user');
+  const user = userStr ? JSON.parse(userStr).user : null;
+  
+  // If not authenticated, redirect to login
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+  
+  // If user exists and face verification is not verified, redirect to face registration
+  if (user && (!user.faceData || user.faceData.verificationStatus !== 'verified')) {
+    return <Navigate to="/face-registration" replace />;
+  }
+  
+  // If authenticated and face verified, render outlet (child routes)
+  return <Outlet />;
 };
 
 // Guest-only route component (for login, signup, splash pages)
@@ -87,6 +133,12 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
           </Route>
+
+          {/* Face Registration Route (accessible only to authenticated users with unverified face) */}
+          <Route path="/face-registration" element={<FaceRegistration />} />
+
+          {/* Face verification check route */}
+          <Route path="/verify-face" element={<FaceCheckRoute />} />
           
           {/* Protected Routes */}
           <Route element={<ProtectedRoute />}>

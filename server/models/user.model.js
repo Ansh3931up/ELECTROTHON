@@ -35,6 +35,12 @@ const userSchema = new Schema(
       minLength: [10, "Phone number must be atleast 10 digits"],
       maxLength: [10, "Phone number must not exceed more than 10 digits"],
     },
+    schoolCode: {
+      type: String,
+      required: [true, "School/College code is required"],
+      trim: true,
+      unique: true,
+    },
     role: {
       type: String,
       enum: ["teacher", "student"], // Allowed values
@@ -48,8 +54,6 @@ const userSchema = new Schema(
     faceData:{
       faceImages: [{
           url: String,
-          clloudinary_public_id: String,
-          captured_at:{type:Date, default:Date.now}
       }],
       lastUpdated: {type:Date, default:Date.now},
       verificationStatus:{

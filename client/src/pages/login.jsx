@@ -24,8 +24,15 @@ const Login = () => {
       const result = await dispatch(loginUser({ email, password, role })).unwrap();
       
       if (result) {
-        // Navigate based on role from the response
-        navigate(role === 'teacher' ? '/teacher' : '/student');
+        // Check if face verification is required
+        const user = result.user;
+        if (user && (!user.faceData || user.faceData.verificationStatus !== 'verified')) {
+          // Redirect to face registration
+          navigate('/face-registration');
+        } else {
+          // Face is already verified, navigate based on role
+          navigate(role === 'teacher' ? '/teacher' : '/student');
+        }
       }
     } catch (err) {
       console.error('Login failed:', err);
@@ -33,7 +40,7 @@ const Login = () => {
   };
 
   return (
-    <div className={`min-h-screen ${isDarkMode ? 'bg-gray-900' : 'bg-gray-100'} relative overflow-hidden`}>
+    <div className={`min-h-screen pb-20 ${isDarkMode ? 'bg-gray-900' : 'bg-gray-100'} relative overflow-hidden`}>
       {/* Background pattern dots */}
       <div className="absolute top-0 right-0 grid grid-cols-10 gap-2 p-4 opacity-20">
         {[...Array(20)].map((_, i) => (

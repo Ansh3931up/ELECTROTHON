@@ -1,11 +1,9 @@
-import React, { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Link, useNavigate } from 'react-router-dom';
-import { FiUser, FiMail, FiLock, FiPhone, FiUserCheck, FiUsers, FiLogIn, FiEye, FiEyeOff, FiArrowRight } from 'react-icons/fi';
-
+import { useState } from "react";
+import { FiEye, FiEyeOff, FiArrowRight } from 'react-icons/fi';
 import { signupUser } from "../redux/slices/authSlice";
 import { useTheme } from '../context/ThemeContext';
-import logo from '../assets/logo1112.png';
 
 const Signup = () => {
   const dispatch = useDispatch();
@@ -19,6 +17,7 @@ const Signup = () => {
     password: "",
     phone: "",
     role: "student",
+    schoolCode: "",
   });
 
   const [validationErrors, setValidationErrors] = useState({});
@@ -43,6 +42,8 @@ const Signup = () => {
       errors.phone = 'Phone number is required';
     if (!formData.password || formData.password.length < 6) 
       errors.password = 'Password must be at least 6 characters';
+    if (!formData.schoolCode || formData.schoolCode.trim() === '') 
+      errors.schoolCode = 'School code is required';
 
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
@@ -57,6 +58,7 @@ const Signup = () => {
     try {
       // Dispatch the signupUser action with form data
       const response = await dispatch(signupUser(formData)).unwrap();
+      console.log("signup response",response);
       setSubmitSuccess(true);
       setTimeout(() => {
         navigate('/login');
@@ -68,34 +70,8 @@ const Signup = () => {
     }
   };
 
-  const InputField = ({ id, name, type, placeholder, value, onChange, error, icon, children }) => (
-    <div className="relative">
-      <span className={`absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-        {icon}
-      </span>
-      <input
-        id={id}
-        name={name}
-        type={type}
-        required
-        value={value}
-        onChange={onChange}
-        className={`block w-full pl-10 pr-3 py-2.5 border rounded-md shadow-sm transition-colors duration-150 text-sm ${
-          error
-            ? 'border-red-400 dark:border-red-500/70 focus:ring-red-500 focus:border-red-500'
-            : `${isDarkMode ? 'border-gray-600 focus:ring-indigo-500 focus:border-indigo-500' : 'border-gray-300 focus:ring-indigo-500 focus:border-indigo-500'}`
-        } ${isDarkMode ? 'bg-gray-700 text-gray-100 placeholder-gray-400' : 'bg-white text-gray-900 placeholder-gray-500'} focus:outline-none focus:ring-1`}
-        placeholder={placeholder}
-      />
-      {children}
-      {error && (
-        <p className="text-red-500 dark:text-red-400 text-xs mt-1 ml-1">{error}</p>
-      )}
-    </div>
-  );
-
   return (
-    <div className={`min-h-screen ${isDarkMode ? 'bg-gray-900' : 'bg-gray-100'} relative overflow-hidden`}>
+    <div className={`min-h-screen pb-40  h-full ${isDarkMode ? 'bg-gray-900' : 'bg-gray-100'} relative overflow-hidden`}>
       {/* Background pattern dots */}
       <div className="absolute top-0 right-0 grid grid-cols-10 gap-2 p-4 opacity-20">
         {[...Array(20)].map((_, i) => (
@@ -210,6 +186,28 @@ const Signup = () => {
               )}
             </div>
             
+            {/* School Code input */}
+            <div className={`relative rounded-md ${isDarkMode ? 'bg-gray-800' : 'bg-gray-200'}`}>
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <span className={`text-gray-500`}>🏫</span>
+              </div>
+              <input
+                type="text"
+                name="schoolCode"
+                value={formData.schoolCode}
+                onChange={handleChange}
+                placeholder="School/College Code"
+                className={`w-full py-3 pl-10 pr-3 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                  isDarkMode ? 'bg-gray-800 text-white' : 'bg-gray-200 text-gray-800'
+                }`}
+              />
+              {validationErrors.schoolCode && (
+                <p className={`text-xs mt-1 ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>
+                  {validationErrors.schoolCode}
+                </p>
+              )}
+            </div>
+            
             {/* Password input */}
             <div className={`relative rounded-md ${isDarkMode ? 'bg-gray-800' : 'bg-gray-200'}`}>
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -301,7 +299,7 @@ const Signup = () => {
             <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
               Already have an account?
             </p>
-            <Link to="/login" className={`font-medium ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+            <Link to="/login" className={`font-medium pointer-cursor ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
               Login
           </Link>
           </div>

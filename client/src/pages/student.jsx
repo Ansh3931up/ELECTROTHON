@@ -216,8 +216,8 @@ const Student = () => {
       try {
         // Request permissions with a small delay to ensure browser is ready
         setTimeout(async () => {
-          const granted = await checkAndRequestPermissions('student');
-          setHasPermissions(granted);
+      const granted = await checkAndRequestPermissions('student');
+      setHasPermissions(granted);
           
           // Clear old status message if permissions were successful
           if (granted && status.includes("missing permissions")) {
@@ -225,9 +225,9 @@ const Student = () => {
           }
         }, 500);
 
-        if (isOffline) {
-          const smsPermissionGranted = await smsReceiver.startListening();
-          setHasSMSPermissions(smsPermissionGranted);
+      if (isOffline) {
+        const smsPermissionGranted = await smsReceiver.startListening();
+        setHasSMSPermissions(smsPermissionGranted);
         }
       } catch (error) {
         console.error("Error requesting permissions:", error);
@@ -305,7 +305,7 @@ const Student = () => {
     
     // Update stored frequency
     setClassFrequencies(prev => ({
-      ...prev,
+            ...prev,
       [data.classId]: data.frequency
     }));
     
@@ -372,9 +372,9 @@ const Student = () => {
     const classObj = classes.find(c => c._id === classId);
     if (!classObj) {
       setStatus("Class not found. Cannot start detection.");
-      return;
+        return;
     }
-    
+
     // Use the active session type or fallback to provided or default
     const activeSessionType = classObj.activeAttendanceSession?.sessionType || sessionType;
     
@@ -401,7 +401,7 @@ const Student = () => {
           // Update state when detection completes
           setDetectionState(prev => ({ ...prev, active: false }));
           setLoadingStates(prev => ({ ...prev, listening: false }));
-          
+
           if (isDetected) {
             // Play success sound
             playSuccessSound();
@@ -670,11 +670,11 @@ const Student = () => {
             const isDetecting = detectionState.active && detectionState.classId === cls._id;
             
             return (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: index * 0.05 }}
-                key={cls._id}
+              key={cls._id}
                 className={`relative overflow-hidden rounded-xl shadow-lg cursor-pointer ${isSelected ? 'ring-2 ring-blue-500' : ''}`}
                 onClick={() => {
                   setSelectedClassId(cls._id);
@@ -732,7 +732,7 @@ const Student = () => {
                     <div className="my-3 px-3 py-2 rounded bg-white/20 backdrop-blur-sm">
                       <p className="text-xs font-medium mb-1">Active Frequency:</p>
                       <div className="flex flex-wrap gap-2">
-                        {classFrequencies[cls._id].map((freq, idx) => (
+                    {classFrequencies[cls._id].map((freq, idx) => (
                           <span key={idx} className="font-mono text-sm px-2 py-0.5 rounded bg-black/20">{freq} Hz</span>
                         ))}
                       </div>
@@ -750,7 +750,7 @@ const Student = () => {
                     </div>
                   </div>
                 </div>
-              </motion.div>
+            </motion.div>
             );
           })}
         </div>

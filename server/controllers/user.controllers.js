@@ -5,11 +5,9 @@ const registerUser = async (req, res, next) => {
   try {
     console.log("Received Data:", req.body); // Debugging
 
+    const { fullName, email, password, role, phone, schoolCode } = req.body;
 
-    const { fullName, email, password, role, phone } = req.body;
-
-    if (!fullName || !email || !password || !role || !phone) {
-
+    if (!fullName || !email || !password || !role || !phone || !schoolCode) {
       return next(new AppError("All fields are required", 400));
     }
 
@@ -18,12 +16,14 @@ const registerUser = async (req, res, next) => {
       return next(new AppError("Email already exists", 400));
     }
 
+    // Create user with schoolCode directly
     const user = await User.create({
       fullName,
       email,
       password,
       role,
       phone,
+      schoolCode: schoolCode.toUpperCase(),
     });
 
     console.log("Created User:", user); // Debugging
@@ -137,6 +137,57 @@ const getAllStudents = async (req, res, next) => {
   }
 };
 
+
+
+const getAllSchoolCodes = async (req, res, next) => {
+  try { 
+    const schoolCodes = await User.find({schoolCode:{$exists:true}});
+    console.log(schoolCodes);
+
+    res.status(200).json({
+      success: true,
+      message: "School codes fetched successfully",
+      schoolCodes,
+    }); 
+  } catch (error) {
+    return next(new AppError("Failed to fetch school codes", 500));
+  }
+};
+
+const updateFaceData = async (req, res, next) => {  
+  try {
+    const { userId, faceData } = req.body;
+    const user = await User.findById(userId);
+    
+    if (!user) {
+      return next(new AppError("User not found", 404));
+    }
+    
+    if(user.faceData.verificationStatus=="verified"){
+      return next(new AppError("Face data already verified", 400));
+    }
+    
+    // Add each URL as an object with the required structure
+    if (Array.isArray(faceData)) {
+      for (const imageUrl of faceData) {
+        user.faceData.faceImages.push({
+          url: imageUrl,
+        });
+      }
+    }
+    console.log(user.faceData.faceImages);
+    await user.save({validateBeforeSave:false});
+    res.status(200).json({
+      success: true,
+      message: "Face data updated successfully",
+    });
+  } catch (error) {
+    return next(new AppError("Failed to update face data",error, 500));
+  }
+};
+
+
+
 export {
   registerUser,
   login,
@@ -144,4 +195,6 @@ export {
   getProfile,
   updateUser,
   getAllStudents,
+  getAllSchoolCodes,
+  updateFaceData,
 };
