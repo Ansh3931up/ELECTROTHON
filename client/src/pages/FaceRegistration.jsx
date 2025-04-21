@@ -1,6 +1,6 @@
 // client/src/pages/FaceRegistration.jsx
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { FiAlertTriangle, FiCamera, FiCheckCircle, FiSave } from 'react-icons/fi';
+import { FiAlertTriangle, FiCheckCircle, FiPause, FiPlay, FiRefreshCw, FiSave } from 'react-icons/fi';
 import { useDispatch } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
@@ -42,6 +42,9 @@ const FaceRegistration = () => {
   
   // Check if user already has face data
   const [hasFaceData, setHasFaceData] = useState(false);
+  
+  // View settings - show or hide captured images
+  const [showCapturedImages, setShowCapturedImages] = useState(false);
 
   // Permission states
   const [hasPermission, setHasPermission] = useState(false);
@@ -52,7 +55,7 @@ const FaceRegistration = () => {
   const [numImagesCollected, setNumImagesCollected] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  
+
   // Camera settings
   const videoConstraints = {
     width: 720,
@@ -63,6 +66,14 @@ const FaceRegistration = () => {
   // Image viewing state
   const [selectedImageIndex, setSelectedImageIndex] = useState(null);
   const [savedToDatabase, setSavedToDatabase] = useState(false);
+  
+  // Auto-capture state
+  const [isAutoCapturing, setIsAutoCapturing] = useState(false);
+  const [autoCapturingProgress, setAutoCapturingProgress] = useState(0);
+  const autoIntervalRef = useRef(null);
+  
+  // Camera view settings
+  const [fullscreenCamera, setFullscreenCamera] = useState(false);
   
   // Check if user already has face data
   useEffect(() => {
@@ -107,30 +118,6 @@ const FaceRegistration = () => {
       setErrorMessage(`Couldn&apos;t access camera: ${error.message}`);
     }
   };
-
-  const captureImage = useCallback(() => {
-    if (numImagesCollected >= 15) {
-      setErrorMessage('Maximum number of images (15) already captured');
-      return;
-    }
-
-    if (webcamRef.current) {
-      try {
-        const imageSrc = webcamRef.current.getScreenshot();
-        if (!imageSrc) {
-          throw new Error('Failed to capture image');
-        }
-        
-        setCollectedImages(prev => [...prev, imageSrc]);
-        setNumImagesCollected(prev => prev + 1);
-        
-        toast.success(`Image ${numImagesCollected + 1}/15 captured!`);
-      } catch (error) {
-        console.error('Error capturing image:', error);
-        setErrorMessage(`Failed to capture image: ${error.message}`);
-      }
-    }
-  }, [numImagesCollected]);
 
   // Function to convert base64 to file object
   const base64ToFile = (base64, filename) => {
@@ -250,7 +237,7 @@ const FaceRegistration = () => {
       
       if(response.success){
         setSavedToDatabase(true);
-        toast.success('Face registration successful!');
+      toast.success('Face registration successful!');
           setTimeout(() => {
             navigate('/');
           }, 1500);
@@ -260,7 +247,7 @@ const FaceRegistration = () => {
         // Setting a small delay before na
         // vigating to ensure the user sees the success message
         setTimeout(() => {
-          navigate('/');
+      navigate('/');
         }, 1500);
       }
     } catch (error) {
@@ -289,29 +276,130 @@ const FaceRegistration = () => {
     }
   };
   
+  // Function to reset/clear all collected images
+  const handleRetake = useCallback(() => {
+    if (isAutoCapturing) {
+      // Stop auto-capture if it's running
+      if (autoIntervalRef.current) {
+        clearInterval(autoIntervalRef.current);
+        autoIntervalRef.current = null;
+      }
+      setIsAutoCapturing(false);
+    }
+    
+    // Clear the collected images
+    setCollectedImages([]);
+    setNumImagesCollected(0);
+    setSelectedImageIndex(null);
+    setErrorMessage('');
+    
+    toast.info("All images cleared. You can start again.");
+  }, [isAutoCapturing]);
+
   // Calculate progress percentage
   const progressPercentage = (numImagesCollected / 15) * 100;
 
+  // Clean up interval on unmount
+  useEffect(() => {
+    return () => {
+      if (autoIntervalRef.current) {
+        clearInterval(autoIntervalRef.current);
+      }
+    };
+  }, []);
+
+  // Function to toggle auto-capture mode
+  const toggleAutoCapture = useCallback(() => {
+    if (isAutoCapturing) {
+      // Stop auto-capture
+      if (autoIntervalRef.current) {
+        clearInterval(autoIntervalRef.current);
+        autoIntervalRef.current = null;
+      }
+      setIsAutoCapturing(false);
+      toast.info("Auto-capture stopped");
+    } else {
+      // Start auto-capture
+      if (numImagesCollected >= 15) {
+        toast.warning("Maximum number of images already collected");
+        return;
+      }
+
+      setIsAutoCapturing(true);
+      setAutoCapturingProgress(0);
+      toast.info("Auto-capture started - photos will be taken automatically");
+
+      let captureCount = 0;
+      const totalNeeded = 15 - numImagesCollected;
+      
+      autoIntervalRef.current = setInterval(() => {
+        if (webcamRef.current) {
+          try {
+            const imageSrc = webcamRef.current.getScreenshot();
+            if (!imageSrc) {
+              throw new Error('Failed to capture image');
+            }
+            
+            setCollectedImages(prev => [...prev, imageSrc]);
+            setNumImagesCollected(prev => prev + 1);
+            
+            captureCount++;
+            setAutoCapturingProgress(Math.min(100, (captureCount / totalNeeded) * 100));
+            
+            // Only show toast for every 5th image to reduce notification spam
+            if (captureCount % 5 === 0 || captureCount === totalNeeded) {
+              toast.success(`Auto-capture: ${numImagesCollected + 1}/15 photos`);
+            }
+            
+            // Stop if we've collected enough images
+            if (numImagesCollected + 1 >= 15 || captureCount >= totalNeeded) {
+              clearInterval(autoIntervalRef.current);
+              autoIntervalRef.current = null;
+              setIsAutoCapturing(false);
+              toast.success('Auto-capture complete!');
+            }
+          } catch (error) {
+            console.error('Error in auto-capture:', error);
+            clearInterval(autoIntervalRef.current);
+            autoIntervalRef.current = null;
+            setIsAutoCapturing(false);
+            setErrorMessage(`Auto-capture failed: ${error.message}`);
+          }
+        }
+      }, 200); // Capture every 0.2 seconds
+    }
+  }, [isAutoCapturing, numImagesCollected, webcamRef]);
+
+  // Function to toggle showing captured images
+  const toggleShowCapturedImages = () => {
+    setShowCapturedImages(prev => !prev);
+  };
+
+  // Toggle fullscreen camera view
+  const toggleFullscreenCamera = () => {
+    setFullscreenCamera(prev => !prev);
+  };
+
   return (
-    <div className={`min-h-screen flex items-center justify-center ${isDarkMode ? 'bg-gray-900' : 'bg-gray-50'} py-12 px-4 sm:px-6 lg:px-8`}>
-      <div className={`max-w-md w-full space-y-8 ${isDarkMode ? 'bg-gray-800' : 'bg-white'} p-8 rounded-xl shadow-lg`}>
-        <div>
-          <h2 className={`mt-2 text-center text-3xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+    <div className={`min-h-screen bg-transparent  flex flex-col items-center justify-center py-6 px-4 sm:px-6 lg:px-8`}>
+      <div className={`w-full ${fullscreenCamera ? 'max-w-5xl' : 'max-w-3xl'} space-y-4 ${isDarkMode ? 'bg-gray-800' : 'bg-white'} p-6 rounded-xl shadow-lg transition-all duration-300`}>
+        <div className="text-center">
+          <h2 className={`text-3xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
             Face Registration
           </h2>
-          <p className={`mt-3 text-center text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-            Please capture 15 photos of your face from different angles
+          <p className={`mt-2 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+            {numImagesCollected}/15 photos captured
           </p>
         </div>
         
         {hasFaceData && (
-          <div className={`p-4 rounded-lg ${
+          <div className={`p-3 rounded-lg ${
             isDarkMode 
               ? 'bg-yellow-900/30 border border-yellow-800 text-yellow-300' 
               : 'bg-yellow-50 border border-yellow-200 text-yellow-700'
           }`}>
-            <div className="flex items-start">
-              <FiAlertTriangle className="text-xl mr-2 flex-shrink-0 mt-0.5" />
+            <div className="flex items-start text-sm">
+              <FiAlertTriangle className="text-lg mr-2 flex-shrink-0 mt-0.5" />
               <span>
                 You already have face data registered. Submitting new data will replace your existing face data.
               </span>
@@ -319,7 +407,7 @@ const FaceRegistration = () => {
           </div>
         )}
         
-        <div className="mt-6 space-y-6">
+        <div className="space-y-4">
           {!hasPermission ? (
             <div className={`flex flex-col items-center justify-center space-y-4 p-6 ${
               isDarkMode 
@@ -349,68 +437,192 @@ const FaceRegistration = () => {
               )}
             </div>
           ) : (
-            <div className="space-y-6">
-              <div className={`relative rounded-lg overflow-hidden shadow-lg ${
-                isDarkMode 
-                  ? 'bg-gray-700 border-4 border-gray-600' 
-                  : 'bg-gray-200 border-4 border-gray-300'
-              }`}>
+            <div className="flex flex-col items-center">
+              {/* Enhanced camera container */}
+              <div 
+                className={`relative w-full ${fullscreenCamera ? 'h-[70vh]' : 'h-[50vh]'} rounded-lg overflow-hidden shadow-xl ${
+                  isDarkMode 
+                    ? 'bg-black border-2 border-gray-600' 
+                    : 'bg-black border-2 border-gray-300'
+                } transition-all duration-300`}
+              >
+                {/* Camera background - solid black */}
+                <div className="absolute inset-0 bg-black"></div>
+                
+                {/* Webcam with object-fit: contain to maintain aspect ratio */}
                 <Webcam
                   audio={false}
                   ref={webcamRef}
                   screenshotFormat="image/jpeg"
                   videoConstraints={videoConstraints}
-                  className="w-full h-auto"
+                  className="absolute inset-0 w-full h-full object-contain z-10"
                 />
                 
-                {/* Progress bar */}
-                <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-70 p-2">
-                  <div className="flex justify-between items-center text-white text-xs mb-1">
-                    <span>Progress:</span>
-                    <span>{numImagesCollected}/15 images</span>
+                {/* Camera viewfinder overlay */}
+                <div className="absolute inset-0 z-20 pointer-events-none">
+                  {/* Corner brackets */}
+                  <div className="absolute top-3 left-3 w-12 h-12 border-t-2 border-l-2 border-white opacity-60"></div>
+                  <div className="absolute top-3 right-3 w-12 h-12 border-t-2 border-r-2 border-white opacity-60"></div>
+                  <div className="absolute bottom-3 left-3 w-12 h-12 border-b-2 border-l-2 border-white opacity-60"></div>
+                  <div className="absolute bottom-3 right-3 w-12 h-12 border-b-2 border-r-2 border-white opacity-60"></div>
+                  
+                  {/* Center focus point */}
+                  <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32">
+                    <div className="w-full h-full rounded-full border border-white opacity-30"></div>
+                    <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 rounded-full border border-white opacity-20"></div>
+                    <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-1 bg-white opacity-70"></div>
                   </div>
-                  <div className={`w-full ${isDarkMode ? 'bg-gray-600' : 'bg-gray-600'} rounded-full h-2.5`}>
-                    <div 
-                      className="bg-green-500 h-2.5 rounded-full transition-all duration-300" 
-                      style={{ width: `${progressPercentage}%` }}
-                    ></div>
+                  
+                  {/* Face position guide text */}
+                  <div className="absolute top-5 left-0 right-0 text-center">
+                    <span className="px-2 py-1 bg-black bg-opacity-50 text-white text-xs rounded">
+                      Position your face in the center
+                    </span>
                   </div>
                 </div>
-              </div>
-              
-              {errorMessage && (
-                <div className={`p-4 ${
+
+                {/* Circular progress indicator in the center during auto-capture */}
+                {isAutoCapturing && (
+                  <div className="absolute inset-0 flex items-center justify-center z-30">
+                    <div className="relative">
+                      {/* Circular progress background */}
+                      <svg className="w-28 h-28" viewBox="0 0 100 100">
+                        <circle 
+                          className="stroke-gray-600 opacity-80"
+                          strokeWidth="6"
+                          fill="rgba(0,0,0,0.5)"
+                          r="44"
+                          cx="50"
+                          cy="50"
+                        />
+                        {/* Animated progress circle */}
+                        <circle 
+                          className="stroke-blue-500"
+                          strokeWidth="6"
+                          fill="transparent"
+                          r="44"
+                          cx="50"
+                          cy="50"
+                          strokeDasharray="276.46"
+                          strokeDashoffset={276.46 - (276.46 * autoCapturingProgress / 100)}
+                          strokeLinecap="round"
+                          style={{
+                            transition: 'stroke-dashoffset 0.2s ease',
+                            transform: 'rotate(-90deg)',
+                            transformOrigin: 'center'
+                          }}
+                        />
+                      </svg>
+                      {/* Text in the center of circle */}
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span className="text-white font-bold text-xl drop-shadow-lg">{numImagesCollected}/15</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Camera controls overlay at bottom */}
+                <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-70 px-4 py-3 z-20">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <div className={`w-2 h-2 rounded-full ${isAutoCapturing ? 'bg-red-500 animate-pulse' : 'bg-green-500'}`}></div>
+                      <span className="text-white text-xs">
+                        {isAutoCapturing ? 'CAPTURING' : 'READY'}
+                      </span>
+                    </div>
+                    
+                    <div className="flex-1 mx-4">
+                      <div className="w-full bg-gray-800 rounded-full h-1">
+                        <div 
+                          className="bg-green-500 h-1 rounded-full transition-all duration-300" 
+                          style={{ width: `${progressPercentage}%` }}
+                        ></div>
+                      </div>
+                </div>
+
+                    <button
+                      onClick={toggleFullscreenCamera}
+                      className="text-white text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded"
+                    >
+                      {fullscreenCamera ? 'Compact' : 'Expand'}
+                    </button>
+                  </div>
+                </div>
+                </div>
+
+                {errorMessage && (
+                <div className={`mt-4 p-3 ${
                   isDarkMode 
                     ? 'bg-red-900/30 border border-red-800 text-red-300' 
                     : 'bg-red-50 border border-red-300 text-red-700'
-                } rounded-lg text-sm flex items-start`}>
-                  <FiAlertTriangle className="text-xl mr-2 flex-shrink-0 mt-0.5" />
+                } rounded-lg text-sm flex items-start w-full`}>
+                  <FiAlertTriangle className="text-lg mr-2 flex-shrink-0 mt-0.5" />
                   <span>{errorMessage}</span>
-                </div>
-              )}
-              
-              <div className="flex justify-center">
+                  </div>
+                )}
+
+              {/* Simplified control buttons - max-width to prevent overflow */}
+              <div className="flex flex-col sm:flex-row justify-center w-full max-w-md mx-auto gap-4 mt-6">
+                {/* Auto-capture button */}
                 <button
-                  onClick={captureImage}
+                  onClick={toggleAutoCapture}
                   disabled={numImagesCollected >= 15 || isSubmitting}
-                  className={`w-3/4 flex items-center justify-center px-6 py-3 ${
+                  className={`flex items-center justify-center px-6 py-3 ${
                     isDarkMode
-                      ? 'bg-green-600 hover:bg-green-700 disabled:bg-gray-700'
-                      : 'bg-green-600 hover:bg-green-700 disabled:bg-gray-400'
-                  } text-white rounded-lg shadow-md transition-colors font-medium text-lg`}
+                      ? isAutoCapturing ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
+                      : isAutoCapturing ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
+                  } disabled:bg-gray-400 text-white rounded-lg shadow-md transition-colors font-medium flex-1`}
                 >
-                  <FiCamera className="mr-2 text-xl" />
-                  Capture Image
+                  {isAutoCapturing ? (
+                    <>
+                      <FiPause className="mr-2" />
+                      Stop Capture
+                    </>
+                  ) : (
+                    <>
+                      <FiPlay className="mr-2" />
+                      Auto-Capture
+                    </>
+                  )}
                 </button>
+
+                {/* Toggle images button - only when there are images */}
+                {collectedImages.length > 0 && (
+                  <button
+                    onClick={toggleShowCapturedImages}
+                    className={`flex items-center justify-center px-6 py-3 ${
+                      isDarkMode
+                        ? 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                        : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                    } rounded-lg shadow-md transition-colors font-medium`}
+                  >
+                    {showCapturedImages ? 'Hide Images' : 'Show Images'}
+                  </button>
+                )}
+                
+                {/* Retake button - only when there are images */}
+                {collectedImages.length > 0 && (
+                  <button
+                    onClick={handleRetake}
+                    className={`flex items-center justify-center px-6 py-3 ${
+                      isDarkMode
+                        ? 'bg-yellow-600 hover:bg-yellow-700 text-white'
+                        : 'bg-yellow-500 hover:bg-yellow-600 text-white'
+                    } rounded-lg shadow-md transition-colors font-medium`}
+                  >
+                    <FiRefreshCw className="mr-2" />
+                    Retake All
+                  </button>
+                )}
               </div>
               
-              {/* Captured images gallery */}
-              {collectedImages.length > 0 && (
-                <div className={`mt-6 ${
+              {/* Collapsible captured images gallery */}
+              {showCapturedImages && collectedImages.length > 0 && (
+                <div className={`mt-4 ${
                   isDarkMode 
                     ? 'bg-gray-800/50 border border-gray-700' 
                     : 'bg-gray-50 border border-gray-200'
-                } p-4 rounded-lg`}>
+                } p-4 rounded-lg w-full`}>
                   <h3 className={`text-sm font-medium ${
                     isDarkMode ? 'text-gray-300' : 'text-gray-700'
                   } mb-3 flex items-center`}>
@@ -423,13 +635,13 @@ const FaceRegistration = () => {
                     </span>
                     Captured Images
                   </h3>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-5 gap-2">
                     {collectedImages.map((img, idx) => (
                       <div key={idx} className="relative group">
                         <img 
                           src={img} 
                           alt={`Face ${idx + 1}`}
-                          className={`w-full h-24 object-cover rounded-md cursor-pointer shadow-sm ${
+                          className={`w-full h-16 object-cover rounded-md cursor-pointer shadow-sm ${
                             isDarkMode
                               ? 'border border-gray-600 hover:shadow-md'
                               : 'border border-gray-300 hover:shadow-md'
@@ -437,12 +649,12 @@ const FaceRegistration = () => {
                           onClick={() => viewImage(idx)}
                         />
                         <button
-                          className="absolute -top-2 -right-2 bg-red-500 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="absolute -top-1 -right-1 bg-red-500 hover:bg-red-600 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity text-xs"
                           onClick={() => removeImage(idx)}
                         >
                           ✕
                         </button>
-                        <span className="absolute bottom-1 right-1 bg-black bg-opacity-60 text-white text-xs px-1.5 py-0.5 rounded">
+                        <span className="absolute bottom-0 right-0 bg-black bg-opacity-60 text-white text-xs px-1 rounded-bl">
                           #{idx + 1}
                         </span>
                       </div>
@@ -451,7 +663,7 @@ const FaceRegistration = () => {
                 </div>
               )}
               
-              {/* Selected image viewer */}
+              {/* Image viewer modal */}
               {selectedImageIndex !== null && (
                 <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50" onClick={closeImageViewer}>
                   <div className="relative max-w-2xl max-h-full p-4">
@@ -478,40 +690,43 @@ const FaceRegistration = () => {
                 </div>
               )}
               
-              {/* Submit buttons */}
-              <div className={`flex justify-center mt-6 pt-4 border-t ${
-                isDarkMode ? 'border-gray-700' : 'border-gray-200'
-              }`}>
-                {savedToDatabase ? (
-                  <div className={`flex items-center justify-center ${
-                    isDarkMode
-                      ? 'text-green-400 bg-green-900/20 border border-green-800'
-                      : 'text-green-500 bg-green-50 border border-green-200'
-                  } p-3 rounded-lg w-full`}>
-                    <FiCheckCircle className="mr-2 text-xl" />
-                    <span className="font-medium">
-                      {hasFaceData 
-                        ? 'Face data updated successfully!' 
-                        : 'Face registration successful!'}
-                    </span>
-                  </div>
-                ) : (
-                  <div className="w-full">
-                    <button
-                      onClick={handleSubmit}
-                      disabled={numImagesCollected < 15 || isSubmitting}
-                      className={`w-full px-4 py-3 ${
-                        isDarkMode
-                          ? 'bg-green-600 hover:bg-green-700 disabled:bg-gray-700'
-                          : 'bg-green-600 hover:bg-green-700 disabled:bg-gray-400'
-                      } text-white rounded-lg shadow flex items-center justify-center transition-colors font-medium text-lg`}
-                    >
-                      <FiSave className="mr-2" />
-                      {isSubmitting ? 'Saving...' : hasFaceData ? 'Update Face Data' : 'Save Face Data'}
-                    </button>
-                  </div>
-                )}
-              </div>
+              {/* Submit button - at the bottom, with larger size */}
+              {!savedToDatabase && numImagesCollected > 0 && (
+                <div className="w-full max-w-md mx-auto mt-6">
+                  <button
+                    onClick={handleSubmit}
+                    disabled={numImagesCollected < 15 || isSubmitting}
+                    className={`flex items-center justify-center px-6 py-4 ${
+                      isDarkMode
+                        ? 'bg-green-600 hover:bg-green-700 disabled:bg-gray-700'
+                        : 'bg-green-600 hover:bg-green-700 disabled:bg-gray-400'
+                    } text-white rounded-lg shadow-lg transition-colors font-medium w-full`}
+                  >
+                    <FiSave className="mr-2 text-lg" />
+                    {isSubmitting ? 'Saving...' : hasFaceData ? 'Update Face Data' : 'Save Face Data'}
+                  </button>
+                  {numImagesCollected < 15 && (
+                    <p className={`text-center text-xs mt-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                      Need {15 - numImagesCollected} more photos before saving
+                    </p>
+                  )}
+                </div>
+              )}
+              
+              {savedToDatabase && (
+                <div className={`flex items-center justify-center mt-6 w-full max-w-md mx-auto ${
+                  isDarkMode
+                    ? 'text-green-400 bg-green-900/20 border border-green-800'
+                    : 'text-green-500 bg-green-50 border border-green-200'
+                } p-4 rounded-lg`}>
+                  <FiCheckCircle className="mr-2 text-xl" />
+                  <span className="font-medium">
+                    {hasFaceData 
+                      ? 'Face data updated successfully!' 
+                      : 'Face registration successful!'}
+                  </span>
+                </div>
+              )}
             </div>
           )}
         </div>
