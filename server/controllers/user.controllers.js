@@ -166,7 +166,7 @@ const updateFaceData = async (req, res, next) => {
     if(user.faceData.verificationStatus=="verified"){
       return next(new AppError("Face data already verified", 400));
     }
-    
+    user.faceData.faceImages=[];
     // Add each URL as an object with the required structure
     if (Array.isArray(faceData)) {
       for (const imageUrl of faceData) {
