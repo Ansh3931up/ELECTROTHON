@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { FiBell, FiCheck, FiX, FiInfo, FiAlertTriangle } from 'react-icons/fi';
 import { AnimatePresence, motion } from 'framer-motion';
+import { createContext, useContext, useState } from 'react';
+import { FiAlertTriangle,FiBell, FiCheck, FiInfo, FiX } from 'react-icons/fi';
+
 import { useTheme } from '../context/ThemeContext';
 
 // Create a context for notifications
