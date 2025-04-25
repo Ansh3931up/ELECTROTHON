@@ -7,14 +7,14 @@ import BackgroundAnimation from './components/BackgroundAnimation';
 // Page Imports
 import ClassDetails from './pages/ClassDetails';
 import EditClass from './pages/EditClass';
+import FaceRegistration from './pages/FaceRegistration';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import SignupCheck from './pages/SignupCheck';
 import SplashScreen from './pages/SplashScreen';
-import Student from './pages/Student';
+import Student from './pages/student';
 import Teacher from './pages/Teacher';
 import TeacherTimetable from './pages/TeacherTimetable';
-import FaceRegistration from './pages/FaceRegistration';
 
 
 
@@ -24,6 +24,7 @@ const FaceCheckRoute = () => {
   const user = userStr ? JSON.parse(userStr).user : null;
   const isAuthenticated = !!localStorage.getItem('token');
   const userRole = localStorage.getItem('userRole');
+  console.log("number one user",user);
   
   // If user is not authenticated, redirect to login
   if (!isAuthenticated) {

@@ -86,18 +86,27 @@ const logout = (req, res) => {
   });
 };
 
-const getProfile = async (req, res) => {
+const getProfile = async (req, res, next) => {
   try {
-    const userId = req.params;
-    const user = await User.findById(userId);
+    const { id } = req.params;
+    
+    if (!id) {
+      return next(new AppError("User ID is required", 400));
+    }
+    
+    const user = await User.findById(id);
+    
+    if (!user) {
+      return next(new AppError("User not found", 404));
+    }
 
     res.status(200).json({
       success: true,
-      message: "User Details",
+      message: "User profile fetched successfully",
       user,
     });
   } catch (error) {
-    return (new AppError("Failed to fetch profile details"));
+    return next(new AppError("Failed to fetch profile details", 500));
   }
 };
 
@@ -156,32 +165,51 @@ const getAllSchoolCodes = async (req, res, next) => {
 
 const updateFaceData = async (req, res, next) => {  
   try {
+    console.log("UPDATE FACE DATA - Request Body:", req.body);
     const { userId, faceData } = req.body;
+    console.log("User ID:", userId);
+    console.log("Face Data:", faceData);
+    
     const user = await User.findById(userId);
+    console.log("Found User:", user ? user._id : "User not found");
     
     if (!user) {
       return next(new AppError("User not found", 404));
     }
     
-    if(user.faceData.verificationStatus=="verified"){
-      return next(new AppError("Face data already verified", 400));
-    }
+    console.log("Current verification status:", user.faceData.verificationStatus);
+    // if(user.faceData.verificationStatus=="verified"){
+    //   return next(new AppError("Face data already verified", 400));
+    // }
+    
     user.faceData.faceImages=[];
+    console.log("Reset face images array");
+    
     // Add each URL as an object with the required structure
     if (Array.isArray(faceData)) {
+      console.log("Processing", faceData.length, "face images");
       for (const imageUrl of faceData) {
         user.faceData.faceImages.push({
           url: imageUrl,
         });
       }
     }
-    console.log(user.faceData.faceImages);
+    
+    user.faceData.verificationStatus="verified";
+    console.log("Updated face images:", user.faceData.faceImages);
+    console.log("New verification status:", user.faceData.verificationStatus);
+    
+    console.log("Saving user data...");
     await user.save({validateBeforeSave:false});
+    console.log("User data saved successfully");
+    
     res.status(200).json({
       success: true,
       message: "Face data updated successfully",
     });
   } catch (error) {
+    console.error("ERROR in updateFaceData:", error);
+    console.log("Error stack:", error.stack);
     return next(new AppError("Failed to update face data",error, 500));
   }
 };

@@ -82,6 +82,20 @@ export const fetchAllStudents = createAsyncThunk(
   }
 );
 
+export const getUserProfile = createAsyncThunk(
+  "auth/getUserProfile",
+  async ({ userId }, { rejectWithValue }) => {
+    try {
+      const response = await axios.get(`${API_URL}/profile/${userId}`, {
+        withCredentials: true,
+      });
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || "Failed to fetch user profile");
+    }
+  }
+);
+
 // Retrieve user from localStorage
 const storedUser = JSON.parse(localStorage.getItem('user')) || null;
 
@@ -196,6 +210,25 @@ const authSlice = createSlice({
         }
       })
       .addCase(registerFace.rejected, (state, action) => {
+        state.error = action.payload;
+        state.loading = false;
+      })
+      .addCase(getUserProfile.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(getUserProfile.fulfilled, (state, action) => {
+        state.user = action.payload.user;
+        state.loading = false;
+        
+        // Update localStorage with the latest user data
+        const userData = JSON.parse(localStorage.getItem('user'));
+        if (userData) {
+          userData.user = action.payload.user;
+          localStorage.setItem('user', JSON.stringify(userData));
+        }
+      })
+      .addCase(getUserProfile.rejected, (state, action) => {
         state.error = action.payload;
         state.loading = false;
       });

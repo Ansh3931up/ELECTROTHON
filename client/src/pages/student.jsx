@@ -4,12 +4,10 @@ import { FiAlertTriangle, FiMessageSquare, FiSearch, FiWifiOff, FiXCircle } from
 import { useDispatch, useSelector } from "react-redux";
 
 import BottomNavBar from '../components/BottomNavBar';
-import OfflineToggle from "../components/OfflineToggle";
 import { useTheme } from '../context/ThemeContext';
 import detectSound from "../helpers/detectSound";
 import { getfrequencyByClassId, getStudentClasses, markStudentPresentByFrequency } from "../redux/slices/classSlice";
 import { checkAndRequestPermissions, checkDeviceCapabilities } from '../utils/permissions';
-import { smsReceiver } from "../utils/smsReceiver";
 import { getSocket, initializeSocket, joinClassRoom, leaveClassRoom, markAttendance } from "../utils/socket";
 
 // Sound helpers for audio feedback
@@ -119,8 +117,6 @@ const Student = () => {
     hasMicrophone: true,
     hasCamera: true
   });
-  const [isOffline, setIsOffline] = useState(false);
-  const [hasSMSPermissions, setHasSMSPermissions] = useState(false);
   const [loadingStates, setLoadingStates] = useState({
     fetchFrequency: {},
     listening: false
@@ -216,19 +212,14 @@ const Student = () => {
       try {
         // Request permissions with a small delay to ensure browser is ready
         setTimeout(async () => {
-      const granted = await checkAndRequestPermissions('student');
-      setHasPermissions(granted);
+          const granted = await checkAndRequestPermissions('student');
+          setHasPermissions(granted);
           
           // Clear old status message if permissions were successful
           if (granted && status.includes("missing permissions")) {
             setStatus("Permissions granted! Waiting for attendance notifications...");
           }
         }, 500);
-
-      if (isOffline) {
-        const smsPermissionGranted = await smsReceiver.startListening();
-        setHasSMSPermissions(smsPermissionGranted);
-        }
       } catch (error) {
         console.error("Error requesting permissions:", error);
         setStatus("Error requesting permissions. Please use the Grant Permissions button.");
@@ -236,47 +227,7 @@ const Student = () => {
     };
 
     setupPermissions();
-
-    return () => {
-      if (isOffline) {
-        smsReceiver.stopListening();
-      }
-    };
-  }, [isOffline, status]);
-
-  useEffect(() => {
-    if (isOffline && selectedClassId) {
-      const removeListener = smsReceiver.addListener((result) => {
-        if (result.success) {
-          setClassFrequencies(prev => ({
-            ...prev,
-            [selectedClassId]: [result.frequency]
-          }));
-          setStatus('Frequency received via SMS! Starting automatic detection...');
-          
-          // Auto-start detection from SMS too
-          startDetection(selectedClassId, [result.frequency]);
-        } else {
-          setStatus('Error processing SMS frequency: ' + result.error);
-        }
-      });
-
-      return () => removeListener();
-    }
-  }, [isOffline, selectedClassId]);
-
-  // Handle offline mode toggle
-  const handleOfflineModeChange = async (offline) => {
-    setIsOffline(offline);
-    if (offline) {
-      const smsPermissionGranted = await smsReceiver.startListening();
-      setHasSMSPermissions(smsPermissionGranted);
-      setStatus('Waiting for frequency via SMS...');
-    } else {
-      smsReceiver.stopListening();
-      setStatus('Waiting for attendance notifications...');
-    }
-  };
+  }, [status]);
 
   // Handle attendance notification from socket
   const handleAttendanceNotification = (data) => {
@@ -580,7 +531,7 @@ const Student = () => {
 
         <div className="flex flex-col sm:flex-row justify-between items-center gap-3 mb-4">
           {/* Search Bar */}
-          <div className={`relative w-full sm:w-2/3 ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+          <div className={`relative w-full ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <FiSearch className="h-5 w-5 text-gray-400" />
             </div>
@@ -596,8 +547,6 @@ const Student = () => {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          
-          <OfflineToggle onModeChange={handleOfflineModeChange} isDarkMode={isDarkMode} />
         </div>
 
         {/* Filter Tabs */}
@@ -643,20 +592,6 @@ const Student = () => {
             Ended
           </button>
         </div>
-
-        {isOffline && !hasSMSPermissions && (
-          <div className={`border-l-4 p-4 mb-4 rounded-r-md ${getInfoBoxBg('warning')}`}>
-            <p className="font-bold flex items-center"><FiMessageSquare className="mr-2"/> SMS Permissions Required</p>
-            <p>Please grant SMS permissions to receive frequency data in offline mode.</p>
-          </div>
-        )}
-
-        {isOffline && hasSMSPermissions && (
-          <div className={`border-l-4 p-4 mb-4 rounded-r-md ${getInfoBoxBg('info')}`}>
-            <p className="font-bold flex items-center"><FiWifiOff className="mr-2"/> Offline Mode Active</p>
-            <p>Waiting for frequency via SMS. Attendance will be automatic when received.</p>
-          </div>
-        )}
 
         {classLoading && <p className={`text-center py-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Loading classes...</p>}
         {classError && <p className={`text-center py-4 ${getInfoBoxBg('error')} p-3 rounded`}>Error loading classes: {classError}</p>}

@@ -7,7 +7,7 @@ import { toast } from 'react-toastify';
 import Webcam from 'react-webcam';
 
 import { useTheme } from '../context/ThemeContext';
-import { registerFace } from '../redux/slices/authSlice';
+import { getUserProfile, registerFace } from '../redux/slices/authSlice';
 import { uploadFileToCloudinary } from '../utils/cloudinaryHelper';
 import { checkCameraPermission, requestCameraPermission } from '../utils/permissions';
 
@@ -40,7 +40,7 @@ const FaceRegistration = () => {
   const user = extractUserData(users);
   console.log("Extracted user data:", user);
   
-  // Check if user already has face data
+  // Check if user already has face data and verification status
   const [hasFaceData, setHasFaceData] = useState(false);
   
   // View settings - show or hide captured images
@@ -75,14 +75,26 @@ const FaceRegistration = () => {
   // Camera view settings
   const [fullscreenCamera, setFullscreenCamera] = useState(false);
   
-  // Check if user already has face data
+  // Check if user already has face data and verification status
   useEffect(() => {
-    if (user && user.faceData && 
-        (user.faceData.faceImages && user.faceData.faceImages.length > 0)) {
-      setHasFaceData(true);
-      console.log("User already has face data:", user.faceData);
+    if (user && user.faceData) {
+      // Check verification status first
+      if (user.faceData.verificationStatus === 'verified') {
+        toast.info('Your face verification is already complete!');
+        // Redirect to home or dashboard page
+        setTimeout(() => {
+          navigate('/');
+        }, 1500);
+        return;
+      }
+      
+      // Set face data flag if they have face images
+      if (user.faceData.faceImages && user.faceData.faceImages.length > 0) {
+        setHasFaceData(true);
+        console.log("User already has face data:", user.faceData);
+      }
     }
-  }, [user]);
+  }, [user, navigate]);
 
   // Check camera permission on mount
   useEffect(() => {
@@ -186,6 +198,37 @@ const FaceRegistration = () => {
     }
   };
 
+  // Function to fetch the latest user data
+  const refreshUserData = async () => {
+    try {
+      const userId = getUserId(users);
+      if (!userId) {
+        console.error("Cannot refresh user data: User ID not found");
+        return;
+      }
+      
+      console.log("Refreshing user data for ID:", userId);
+      
+      // Call your API to get the latest user data
+      const refreshedUserData = await dispatch(getUserProfile({ userId })).unwrap();
+      
+      // Update local storage with fresh data
+      if (refreshedUserData) {
+        // Store the updated user data
+        localStorage.setItem('user', JSON.stringify(refreshedUserData));
+        console.log("User data refreshed:", refreshedUserData);
+        
+        // Check updated verification status
+        if (refreshedUserData.faceData && 
+            refreshedUserData.faceData.verificationStatus === 'verified') {
+          toast.success("Your face verification is now complete!");
+        }
+      }
+    } catch (error) {
+      console.error("Failed to refresh user data:", error);
+    }
+  };
+
   const handleSubmit = async () => {
     if (numImagesCollected < 15) {
       setErrorMessage('Please collect all 15 images before submitting.');
@@ -237,17 +280,13 @@ const FaceRegistration = () => {
       
       if(response.success){
         setSavedToDatabase(true);
-      toast.success('Face registration successful!');
-          setTimeout(() => {
-            navigate('/');
-          }, 1500);
+        toast.success('Face registration successful!');
         
-      }
-      if (!hasFaceData) {
-        // Setting a small delay before na
-        // vigating to ensure the user sees the success message
+        // Refresh user data to get the latest verification status
+        await refreshUserData();
+        
         setTimeout(() => {
-      navigate('/');
+          navigate('/');
         }, 1500);
       }
     } catch (error) {
