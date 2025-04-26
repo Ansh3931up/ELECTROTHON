@@ -362,7 +362,7 @@ const Student = () => {
             
             // Keep canvas visible for a moment to see final detection
             setTimeout(() => setCanvasVisible(false), 3000);
-            
+            console.log("marking attendance", classId, user.user._id, user.user.fullName || user.user.email, 'present', activeSessionType);
             // Emit socket event for real-time update with the correct session type
             const marked = markAttendance(
               classId, 

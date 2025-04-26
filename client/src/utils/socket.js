@@ -53,6 +53,13 @@ export const initializeSocket = (user) => {
 export const joinClassRoom = (classId, userId) => {
   if (!socket?.connected || !classId || !userId) return;
   
+  // Using new naming convention (student:joinClass)
+  socket.emit('student:joinClass', {
+    classId,
+    userId
+  });
+  
+  // For backward compatibility, also emit the old event
   socket.emit('joinClass', {
     classId,
     userId
@@ -67,6 +74,13 @@ export const joinClassRoom = (classId, userId) => {
 export const leaveClassRoom = (classId, userId) => {
   if (!socket?.connected || !classId || !userId) return;
   
+  // Using new naming convention (student:leaveClass)
+  socket.emit('student:leaveClass', {
+    classId,
+    userId
+  });
+  
+  // For backward compatibility, also emit the old event
   socket.emit('leaveClass', {
     classId,
     userId
@@ -81,16 +95,47 @@ export const leaveClassRoom = (classId, userId) => {
  * @param {string} sessionType - Type of session ('lecture' or 'lab')
  */
 export const initiateAttendance = (classId, frequency, teacherId, sessionType = 'lecture') => {
-  if (!socket?.connected || !classId || !frequency || !teacherId) return;
+  if (!socket?.connected || !classId || !teacherId) return;
   
+  // Using new naming convention (teacher:startAttendance)
+  socket.emit('teacher:startAttendance', {
+    classId,
+    teacherId,
+    sessionType
+  });
+  
+  // For backward compatibility, also emit the old event with all parameters
   socket.emit('initiateAttendance', {
     classId,
     frequency,
     teacherId,
     sessionType,
     timestamp: new Date().toISOString(),
-    autoDetect: true, // Flag to tell students to auto-start detection
     message: `Attendance check initiated by teacher for ${sessionType}`
+  });
+};
+
+/**
+ * Teacher ends attendance session
+ * @param {string} classId - ID of class
+ * @param {string} teacherId - Teacher's user ID
+ * @param {string} sessionType - Type of session ('lecture' or 'lab')
+ */
+export const endAttendance = (classId, teacherId, sessionType = 'lecture') => {
+  if (!socket?.connected || !classId || !teacherId) return;
+  
+  // Using new naming convention (teacher:endAttendance)
+  socket.emit('teacher:endAttendance', {
+    classId,
+    teacherId,
+    sessionType
+  });
+  
+  // For backward compatibility, also emit the old event
+  socket.emit('endAttendance', {
+    classId,
+    teacherId,
+    sessionType
   });
 };
 
@@ -110,7 +155,16 @@ export const markAttendance = (classId, studentId, studentName, status = 'presen
   
   console.log(`Emitting attendance marked for ${studentName} (${studentId}) in class ${classId} - ${sessionType}`);
   
-  // Include timestamp to help with sorting/priority in the UI
+  // Using new naming convention (student:markAttendance)
+  socket.emit('student:markAttendance', {
+    classId,
+    studentId,
+    studentName,
+    status,
+    sessionType
+  });
+  
+  // For backward compatibility, also emit the old event
   socket.emit('attendanceMarked', {
     classId,
     studentId,

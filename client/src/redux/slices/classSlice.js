@@ -190,6 +190,7 @@ export const markStudentPresentByFrequency = createAsyncThunk(
   "class/markStudentPresent",
   // Expects { classId, studentId, detectedFrequency, sessionType }
   async (markData, { rejectWithValue }) => {
+    console.log("markStudentPresentByFrequency", markData);
     try {
       const token = localStorage.getItem("token"); // Or however student auth is handled
 

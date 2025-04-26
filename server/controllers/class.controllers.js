@@ -406,6 +406,7 @@ export const saveDailyAttendance = async (req, res, next) => {
 
 // --- NEW THUNK for student marking >>>
 export const markStudentPresentByFrequency = asyncHandler(async (req, res) => {
+  console.log("markStudentPresentByFrequency",req.body);
   const { classId, studentId, detectedFrequency, sessionType: requestedSessionType } = req.body;
 
   // Input validation
