@@ -352,7 +352,7 @@ const ClassDetails = () => {
         console.log("Both lecture and lab have been recorded, showing initial state");
         setIsMarkingMode(false);
         setIsSelectingType(false);
-      setCurrentSessionType(null);
+    setCurrentSessionType(null);
     }
     } else {
       // No record for today, show initial state
@@ -468,12 +468,40 @@ const ClassDetails = () => {
         }));
         
         // Re-sort the list with the updated data
-    if (currentClass?.studentList) {
+        if (currentClass?.studentList) {
           sortStudentList(currentClass.studentList, {
             ...currentDailyAttendance,
             [studentId]: status
           });
         }
+      }
+      
+      // Show a toast notification to everyone in the class
+      toast.success(`${studentName} marked as ${status}`, {
+        duration: 3000,
+        position: 'bottom-right'
+      });
+      
+      // For students who marked their own attendance, show more prominent feedback
+      if (user?.user?._id === studentId) {
+        toast.success(`Your attendance has been marked as ${status}!`, {
+          duration: 5000,
+          icon: '✅',
+          position: 'top-center'
+        });
+        
+        // Refresh the class details after a short delay to show updated attendance
+        setTimeout(() => {
+          dispatch(fetchClassDetails(id));
+        }, 1000);
+      }
+      
+      // For teachers, also refresh the class details to get updated attendance stats
+      if (user?.user?.role === 'teacher') {
+        // Wait a bit for the backend to process the update
+        setTimeout(() => {
+          dispatch(fetchClassDetails(id));
+        }, 2000);
       }
     });
 
@@ -1100,6 +1128,69 @@ const ClassDetails = () => {
     );
   };
 
+  // Add a function to handle frequency-based attendance marking
+  const handleMarkAttendanceWithFrequency = async () => {
+    if (!currentClass?._id || !user?.user?._id || isPlaying) return;
+    
+    // Get the current frequency
+    const frequency = classFrequencies[currentClass._id]?.[0];
+    if (!frequency) {
+      toast.error("No active frequency found");
+      return;
+    }
+    
+    try {
+      // Show a loading toast
+      const loadingToastId = toast.loading("Marking your attendance...");
+      
+      // Find the active session type
+      const sessionTypeToUse = currentClass.activeAttendanceSession?.sessionType || 'lecture';
+      
+      // Use the markAttendance function to record attendance
+      const success = markAttendance(
+        currentClass._id,
+        user.user._id,
+        user.user.fullName || user.user.name || 'Student',
+        'present',
+        sessionTypeToUse
+      );
+      
+      toast.dismiss(loadingToastId);
+      
+      if (success) {
+        // Show success message
+        toast.success("Your attendance has been marked successfully!", {
+          duration: 5000,
+          icon: '✅'
+        });
+        
+        // Update local state immediately to show the change
+        setRealTimeAttendance(prev => ({
+          ...prev,
+          [user.user._id]: {
+            status: 'present',
+            timestamp: new Date().toISOString(),
+            studentName: user.user.fullName || user.user.name || 'Student',
+            sessionType: sessionTypeToUse
+          }
+        }));
+        
+        // Close the frequency popup
+        setShowFrequencyPopup(false);
+        
+        // Refresh class details to get updated attendance data
+        setTimeout(() => {
+          dispatch(fetchClassDetails(id));
+        }, 1000);
+      } else {
+        toast.error("Failed to mark attendance. Please try again.");
+      }
+    } catch (error) {
+      console.error("Error marking attendance:", error);
+      toast.error(`Error: ${error.message || "Failed to mark attendance"}`);
+    }
+  };
+
   // --- Render Logic ---
   if (loading) return <div className={`flex justify-center items-center h-screen ${isDarkMode ? 'bg-gray-900 text-gray-400' : 'bg-gray-100 text-gray-600'}`}><p>Loading...</p></div>;
   if (error) return <div className={`p-6 text-center ${isDarkMode ? 'text-red-400 bg-red-900/50 border border-red-700' : 'text-red-600 bg-red-100 border border-red-300'} rounded-lg max-w-md mx-auto mt-10`}>Error: {error}</div>;
@@ -1370,20 +1461,54 @@ const ClassDetails = () => {
                       {classFrequencies[currentClass._id]?.[0] || '---'} Hz
                     </span>
                   </div>
-                  <button
-                    onClick={togglePlaySound}
-                    className={`inline-flex items-center justify-center w-16 h-16 rounded-full shadow-lg text-white transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-                      isPlaying 
-                        ? 'bg-red-600 hover:bg-red-700 focus:ring-red-500' 
-                        : 'bg-green-600 hover:bg-green-700 focus:ring-green-500'
-                    } ${isDarkMode ? 'focus:ring-offset-gray-800' : 'focus:ring-offset-white'}`}
-                    aria-label={isPlaying ? 'Pause sound' : 'Play sound'}
-                  >
-                    {isPlaying ? <FiPause className="w-7 h-7" /> : <FiPlay className="w-7 h-7 pl-1" />}
-                  </button>
-                  <p className={`mt-4 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                    {isPlaying ? "Playing..." : "Click to play sound"}
-                  </p>
+                  
+                  {/* For teacher: play button */}
+                  {isClassTeacher && (
+                    <>
+                      <button
+                        onClick={togglePlaySound}
+                        className={`inline-flex items-center justify-center w-16 h-16 rounded-full shadow-lg text-white transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                          isPlaying 
+                            ? 'bg-red-600 hover:bg-red-700 focus:ring-red-500' 
+                            : 'bg-green-600 hover:bg-green-700 focus:ring-green-500'
+                        } ${isDarkMode ? 'focus:ring-offset-gray-800' : 'focus:ring-offset-white'}`}
+                        aria-label={isPlaying ? 'Pause sound' : 'Play sound'}
+                      >
+                        {isPlaying ? <FiPause className="w-7 h-7" /> : <FiPlay className="w-7 h-7 pl-1" />}
+                      </button>
+                      <p className={`mt-4 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                        {isPlaying ? "Playing..." : "Click to play sound"}
+                      </p>
+                    </>
+                  )}
+                  
+                  {/* For student: mark attendance button */}
+                  {!isClassTeacher && user?.user?.role === 'student' && (
+                    <>
+                      <button
+                        onClick={handleMarkAttendanceWithFrequency}
+                        className={`mt-2 w-full font-medium py-3 px-6 rounded-lg shadow-md text-white transition-colors duration-150 text-base focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-green-500 bg-green-600 hover:bg-green-700 ${
+                          isDarkMode ? 'focus:ring-offset-gray-800' : 'focus:ring-offset-white'
+                        }`}
+                      >
+                        Mark Attendance
+                      </button>
+                      <p className={`mt-4 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                        Play this frequency and click the button to mark your attendance
+                      </p>
+                      <button
+                        onClick={togglePlaySound}
+                        className={`mt-4 inline-flex items-center justify-center px-4 py-2 rounded-md shadow-md text-white transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                          isPlaying 
+                            ? 'bg-red-600 hover:bg-red-700 focus:ring-red-500' 
+                            : 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500'
+                        } ${isDarkMode ? 'focus:ring-offset-gray-800' : 'focus:ring-offset-white'}`}
+                        aria-label={isPlaying ? 'Stop sound' : 'Play sound'}
+                      >
+                        {isPlaying ? <><FiPause className="w-4 h-4 mr-2" /> Stop Sound</> : <><FiPlay className="w-4 h-4 mr-2" /> Play Sound</>}
+                      </button>
+                    </>
+                  )}
                 </div>
              </div>
            </div>
