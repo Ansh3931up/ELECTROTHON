@@ -1,8 +1,7 @@
-// eslint-disable-next-line sort-imports
 import { useEffect, useState } from "react";
 import { toast } from "react-hot-toast";
 // Icons for better visual cues
-import { FiChevronLeft, FiEdit, FiPause, FiPlay, FiUsers, FiX } from 'react-icons/fi';
+import { FiChevronLeft, FiEdit, FiMessageSquare, FiUsers, FiX } from 'react-icons/fi';
 import { useDispatch, useSelector } from "react-redux";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
@@ -10,19 +9,19 @@ import { useTheme } from "../context/ThemeContext"; // Import theme context
 import { 
   clearAttendanceError, 
   fetchClassDetails, 
-  generatefrequency
+  generatefrequency,
+  fetchOngoingAttendance
 } from "../redux/slices/classSlice";
 import { sendFrequencySMS, storeOfflineFrequency } from "../utils/offlineMode";
 import { 
+  endAttendance,
   fetchAttendanceData,
   getSocket, 
   initializeSocket, 
   initiateAttendance, 
   joinClassRoom, 
   leaveClassRoom,
-  markAttendance,
-  endAttendance
-} from "../utils/socket";
+  markAttendance} from "../utils/socket";
 // Import the hook but keep it commented until we fully migrate to it
 // import useAttendanceSocket from "../utils/useAttendanceSocket";
 
@@ -48,7 +47,13 @@ const ClassDetails = () => {
 
   // Selectors
   const user = useSelector((state) => state.auth.user);
-  const { currentClass, loading, error, attendanceSaving, attendanceError } = useSelector((state) => state.class);
+  const { 
+    currentClass, 
+    loading, 
+    error, 
+    attendanceSaving,
+    fetchingOngoingAttendance
+  } = useSelector((state) => state.class);
   console.log("currentClass", currentClass);
   
   // State for attendance marking session
@@ -74,11 +79,36 @@ const ClassDetails = () => {
   const [oscillator, setOscillator] = useState(null);
 
   const isClassTeacher = currentClass?.teacherId?._id === user?.user?._id;
-  // Check if there's an active attendance session
-  const hasActiveSession = currentClass?.activeAttendanceSession?.isActive || false;
-  // This is used in multiple functions throughout the file
-  /* eslint-disable-next-line no-unused-vars */
-  const activeSessionType = currentClass?.activeAttendanceSession?.sessionType || null;
+  
+  // Check if there's an active attendance session by looking at today's records
+  const getTodayAttendanceInfo = () => {
+    if (!currentClass?.attendanceRecords?.length) return { hasActiveSession: false, activeSessionType: null };
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const todayRecord = currentClass.attendanceRecords.find(record => {
+      const recordDate = new Date(record.date);
+      recordDate.setHours(0, 0, 0, 0);
+      return recordDate.getTime() === today.getTime();
+    });
+    
+    if (!todayRecord) return { hasActiveSession: false, activeSessionType: null };
+    
+    // Check if lecture or lab is active
+    const isLectureActive = todayRecord.lecture && 
+      (typeof todayRecord.lecture === 'object' ? todayRecord.lecture.active : false);
+    
+    const isLabActive = todayRecord.lab && 
+      (typeof todayRecord.lab === 'object' ? todayRecord.lab.active : false);
+    
+    const hasActiveSession = isLectureActive || isLabActive;
+    const activeSessionType = isLectureActive ? 'lecture' : (isLabActive ? 'lab' : null);
+    
+    return { hasActiveSession, activeSessionType };
+  };
+  
+  const { hasActiveSession } = getTodayAttendanceInfo();
 
   // Initialize the attendance socket hook (for future use if needed)
   // const {
@@ -252,10 +282,12 @@ const ClassDetails = () => {
 
     console.log("Current class updated:", currentClass);
 
-    // First check if there's an active session directly from the class
-    if (currentClass.activeAttendanceSession?.isActive) {
-      console.log("Active session found:", currentClass.activeAttendanceSession);
-      setCurrentSessionType(currentClass.activeAttendanceSession.sessionType);
+    const { hasActiveSession, activeSessionType } = getTodayAttendanceInfo();
+
+    // First check if there's an active session 
+    if (hasActiveSession) {
+      console.log("Active session found:", activeSessionType);
+      setCurrentSessionType(activeSessionType);
       setIsMarkingMode(true);
       setIsSelectingType(false);
       
@@ -549,6 +581,11 @@ const ClassDetails = () => {
     // Show a loading toast
     const loadingToastId = toast.loading("Starting attendance session...");
     
+    // First try to fetch any existing ongoing attendance data for this session type
+    fetchOngoingAttendanceData(type);
+    toast.dismiss(loadingToastId);
+    
+    // Rest of the existing function remains the same
     fetchAttendanceData(currentClass._id, today, type)
       .then((data) => {
         toast.dismiss(loadingToastId);
@@ -677,8 +714,8 @@ const ClassDetails = () => {
     setCurrentDailyAttendance({});
     
     // Use socket function to end the attendance session
-    if (hasActiveSession) {
-      endAttendance(id, user.user._id, currentSessionType || activeSessionType);
+    if (currentSessionType) {
+      endAttendance(id, user.user._id, currentSessionType);
     }
   };
 
@@ -1012,7 +1049,7 @@ const ClassDetails = () => {
     const studentStatus = realTimeAttendance[student._id]?.status || currentDailyAttendance[student._id] || 'absent';
     
     return (
-      <div key={student._id} className={`flex items-center justify-between p-5 gap-5 ${
+      <div key={student._id} className={`flex items-center justify-between px-3 py-2.5 gap-3 ${
         isDarkMode 
           ? index % 2 === 0 ? 'bg-gray-800' : 'bg-gray-800/60' 
           : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/60'
@@ -1030,19 +1067,19 @@ const ClassDetails = () => {
             
             {/* Real-time attendance indicator */}
             {hasMarkedAttendance && (
-              <span className={`ml-2 text-xs px-1.5 py-0.5 rounded ${
+              <span className={`ml-2 text-xs px-1 py-0.5 rounded ${
                 isDarkMode ? 'bg-green-800 text-green-200' : 'bg-green-100 text-green-800'
               }`}>
                 Marked
               </span>
             )}
           </div>
-          <p className={`text-sm truncate ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{student.email}</p>
+          <p className={`text-xs truncate ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{student.email}</p>
         </div>
-        <div className="flex space-x-3 flex-shrink-0">
+        <div className="flex space-x-2 flex-shrink-0">
           <button
             type="button"
-            className={`px-4 h-9 rounded-md text-sm font-medium border transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-1 ${
+            className={`px-3 h-8 rounded-md text-xs font-medium border transition-all duration-150 focus:outline-none focus:ring-1 focus:ring-offset-1 ${
               studentStatus === 'present'
                 ? 'bg-green-600 text-white border-green-600 focus:ring-green-500 shadow-sm'
                 : isDarkMode 
@@ -1055,7 +1092,7 @@ const ClassDetails = () => {
           </button>
           <button
             type="button"
-            className={`px-4 h-9 rounded-md text-sm font-medium border transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-1 ${
+            className={`px-3 h-8 rounded-md text-xs font-medium border transition-all duration-150 focus:outline-none focus:ring-1 focus:ring-offset-1 ${
               studentStatus === 'absent'
                 ? 'bg-red-600 text-white border-red-600 focus:ring-red-500 shadow-sm'
                 : isDarkMode 
@@ -1067,62 +1104,6 @@ const ClassDetails = () => {
           >
             Absent
           </button>
-        </div>
-      </div>
-    );
-  };
-
-  // Add a helper function to render attendance statistics
-  const renderAttendanceStats = () => {
-    if (!currentClass?.studentList?.length) return null;
-    
-    const totalStudents = currentClass.studentList.length;
-    const presentCount = Object.values(currentDailyAttendance).filter(status => 
-      status === 'present'
-    ).length;
-    
-    // Also check real-time attendance for students who may have marked themselves present
-    const realTimePresentCount = Object.values(realTimeAttendance)
-      .filter(data => data?.status === 'present' && data?.sessionType === currentSessionType)
-      .length;
-    
-    // Use the higher count (in case some students are in both)
-    const finalPresentCount = Math.max(presentCount, realTimePresentCount);
-    const absentCount = totalStudents - finalPresentCount;
-    const attendancePercentage = totalStudents > 0 ? Math.round((finalPresentCount / totalStudents) * 100) : 0;
-    
-    return (
-      <div className={`px-6 py-4 border-b ${
-        isDarkMode 
-          ? 'bg-gray-700/30 border-gray-700' 
-          : 'bg-gray-100/50 border-gray-200'
-      }`}>
-        <div className="flex flex-wrap justify-between items-center">
-          <div className="mb-2 sm:mb-0">
-            <h3 className={`text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-              Attendance Progress
-            </h3>
-            <div className="flex items-center gap-3 mt-1">
-              <div className={`text-sm ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>
-                <span className="font-medium">{finalPresentCount}</span> Present
-              </div>
-              <div className={`text-sm ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>
-                <span className="font-medium">{absentCount}</span> Absent
-              </div>
-            </div>
-          </div>
-          
-          <div>
-            <div className="w-32 h-2.5 bg-gray-200 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-green-500" 
-                style={{ width: `${attendancePercentage}%` }}
-              ></div>
-            </div>
-            <p className={`text-xs mt-1 text-right ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-              {attendancePercentage}% marked
-            </p>
-          </div>
         </div>
       </div>
     );
@@ -1191,6 +1172,88 @@ const ClassDetails = () => {
     }
   };
 
+  // Function to fetch ongoing attendance data
+  const fetchOngoingAttendanceData = (sessionType = null) => {
+    if (!id) return;
+    
+    // Show loading toast
+    const loadingToastId = toast.loading("Fetching attendance data...");
+    
+    dispatch(fetchOngoingAttendance({ classId: id, sessionType }))
+      .then((result) => {
+        toast.dismiss(loadingToastId);
+        
+        if (fetchOngoingAttendance.fulfilled.match(result)) {
+          const attendanceData = result.payload;
+          
+          if (attendanceData) {
+            // Update UI based on fetched data
+            setCurrentSessionType(attendanceData.sessionType);
+            
+            if (attendanceData.records && attendanceData.records.length > 0) {
+              // Format attendance data for the UI
+              const formattedAttendance = {};
+              attendanceData.records.forEach(record => {
+                formattedAttendance[record.studentId] = record.status;
+              });
+              
+              setCurrentDailyAttendance(formattedAttendance);
+              
+              // Set marking mode if there's active attendance
+              setIsMarkingMode(attendanceData.hasActiveSession || attendanceData.isActive);
+              setIsSelectingType(false);
+              
+              // Sort student list
+              if (currentClass?.studentList) {
+                sortStudentList(currentClass.studentList, formattedAttendance);
+              }
+              
+              toast.success(`${attendanceData.sessionType} attendance loaded`);
+            } else {
+              toast.info(`No attendance records found for ${attendanceData.sessionType} session`);
+            }
+          }
+        } else {
+          toast.error("Failed to fetch attendance data");
+        }
+      })
+      .catch(err => {
+        toast.dismiss(loadingToastId);
+        toast.error(`Error: ${err.message || "Failed to fetch attendance"}`);
+      });
+  };
+
+  // Add this to the useEffect that handles attendance checks
+  useEffect(() => {
+    // When currentClass is updated, check if there's an active session
+    if (!currentClass) return;
+    
+    // If there's an active attendance session, fetch the latest data
+    if (currentClass.activeAttendanceSession?.isActive) {
+      const sessionType = currentClass.activeAttendanceSession.sessionType;
+      fetchOngoingAttendanceData(sessionType);
+    }
+  }, [currentClass]);
+
+  // Optional: Add a new button to refresh attendance data
+  const renderAttendanceRefreshButton = () => {
+    if (!isMarkingMode || !currentSessionType) return null;
+    
+    return (
+      <button
+        onClick={() => fetchOngoingAttendanceData(currentSessionType)}
+        className={`text-xs font-medium py-1 px-3 rounded transition-colors duration-150 focus:outline-none mr-2 ${
+          isDarkMode 
+            ? 'bg-blue-800/60 text-blue-200 hover:bg-blue-700/70' 
+            : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+        }`}
+        disabled={fetchingOngoingAttendance}
+      >
+        {fetchingOngoingAttendance ? 'Refreshing...' : 'Refresh Data'}
+      </button>
+    );
+  };
+
   // --- Render Logic ---
   if (loading) return <div className={`flex justify-center items-center h-screen ${isDarkMode ? 'bg-gray-900 text-gray-400' : 'bg-gray-100 text-gray-600'}`}><p>Loading...</p></div>;
   if (error) return <div className={`p-6 text-center ${isDarkMode ? 'text-red-400 bg-red-900/50 border border-red-700' : 'text-red-600 bg-red-100 border border-red-300'} rounded-lg max-w-md mx-auto mt-10`}>Error: {error}</div>;
@@ -1198,43 +1261,40 @@ const ClassDetails = () => {
 
   return (
     <div className={`min-h-screen pb-24 pt-2 transition-colors duration-300 bg-transparent`}>
-      <div className="p-4 sm:p-6 max-w-4xl mx-auto">
+      <div className="p-2 sm:p-4 max-w-full mx-auto">
 
-        {/* --- Header --- */}
-        <div className="flex items-center justify-between mb-6 sm:mb-8">
+        {/* --- Condensed Header and Info Section --- */}
+        <div className="flex items-center justify-between mb-3">
           <div className="flex items-center">
             <button
               onClick={() => navigate(-1)}
-              className={`mr-3 p-2 rounded-full transition-colors duration-150 ${isDarkMode ? 'text-gray-400 hover:bg-gray-700 hover:text-gray-100' : 'text-gray-600 hover:bg-gray-200 hover:text-gray-900'}`}
+              className={`mr-2 p-1.5 rounded-full transition-colors duration-150 ${isDarkMode ? 'text-gray-400 hover:bg-gray-700 hover:text-gray-100' : 'text-gray-600 hover:bg-gray-200 hover:text-gray-900'}`}
               aria-label="Go back"
             >
-              <FiChevronLeft className="w-6 h-6" />
+              <FiChevronLeft className="w-5 h-5" />
             </button>
-            <h1 className={`text-2xl sm:text-3xl font-bold ${isDarkMode ? 'text-gray-100' : 'text-gray-800'}`}>{currentClass.className}</h1>
+            <div>
+              <h1 className={`text-lg font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-800'}`}>{currentClass.className}</h1>
+              <div className={`flex items-center text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                <FiUsers className="w-3.5 h-3.5 mr-1" />
+                <span>Students: {currentClass?.studentList?.length || 0}</span>
+              </div>
+            </div>
           </div>
           {isClassTeacher && (
             <Link
               to={`/edit-class/${id}`}
-              className={`flex items-center gap-1.5 px-3 py-1.5 border text-sm font-medium rounded-md shadow-sm hover:bg-opacity-80 transition-colors ${
+              className={`flex items-center gap-1 px-2.5 py-1 border text-xs font-medium rounded-md shadow-sm hover:bg-opacity-80 transition-colors ${
                 isDarkMode 
                   ? 'bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600' 
                   : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-100'
               }`}
               title="Edit Class Details"
             >
-              <FiEdit className="w-4 h-4"/>
+              <FiEdit className="w-3.5 h-3.5"/>
               Edit
             </Link>
           )}
-        </div>
-
-        {/* --- UPDATED: Class Info --- */}
-        <div className={`mb-6 sm:mb-8 space-y-3 text-base ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-            {/* Display Student Count */}
-            <p className="flex items-center">
-                <FiUsers className={`w-5 h-5 mr-2.5 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}/>
-                <span className="font-medium mr-1.5">Students:</span> {currentClass?.studentList?.length || 0}
-            </p>
         </div>
 
         {/* --- Attendance Section Card --- */}
@@ -1245,15 +1305,15 @@ const ClassDetails = () => {
         }`}>
           {/* State 1: Initial View - Show "Start" button */}
           {!isSelectingType && !isMarkingMode && !hasActiveSession && (
-            <div className="p-8 sm:p-10 text-center">
-              <h2 className={`text-xl font-semibold mb-6 ${isDarkMode ? 'text-gray-100' : 'text-gray-800'}`}>
+            <div className="p-6 text-center">
+              <h2 className={`text-lg font-semibold mb-4 ${isDarkMode ? 'text-gray-100' : 'text-gray-800'}`}>
                 {hasTodayActiveRecord() 
                   ? "Continue marking today's attendance" 
                   : "Ready to mark attendance?"}
               </h2>
                 <button
                 onClick={handleInitiateAttendance}
-                className={`bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-8 rounded-lg shadow hover:shadow-lg transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 text-base ${isDarkMode ? 'focus:ring-offset-gray-800' : 'focus:ring-offset-white'}`}
+                className={`bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 px-6 rounded-lg shadow hover:shadow-lg transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 text-base ${isDarkMode ? 'focus:ring-offset-gray-800' : 'focus:ring-offset-white'}`}
                 >
                 {hasTodayActiveRecord() 
                   ? "Continue Attendance" 
@@ -1262,14 +1322,14 @@ const ClassDetails = () => {
             </div>
           )}
 
-          {/* State 2: Selecting Type */}
+          {/* State 2: Selecting Type (Condensed UI) */}
           {isSelectingType && !isMarkingMode && (
-            <div className="p-6 sm:p-8">
-                <h2 className={`text-lg font-semibold mb-5 text-center ${isDarkMode ? 'text-gray-100' : 'text-gray-800'}`}>Select Session Type</h2>
-                <div className="flex flex-col sm:flex-row justify-center gap-4 mb-6">
+            <div className="p-4 sm:p-6">
+                <h2 className={`text-base font-semibold mb-4 text-center ${isDarkMode ? 'text-gray-100' : 'text-gray-800'}`}>Select Session Type</h2>
+                <div className="flex flex-col sm:flex-row justify-center gap-3 mb-4">
                     <button
                         onClick={() => handleSelectSessionType('lecture')}
-                        className={`flex-1 font-medium py-3 px-6 rounded-lg transition-colors duration-150 text-base focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500 ${
+                        className={`flex-1 font-medium py-2.5 px-5 rounded-lg transition-colors duration-150 text-sm focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500 ${
                           isDarkMode 
                             ? 'bg-blue-800/60 text-blue-200 hover:bg-blue-700/70' 
                             : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
@@ -1279,7 +1339,7 @@ const ClassDetails = () => {
                     </button>
                     <button
                         onClick={() => handleSelectSessionType('lab')}
-                        className={`flex-1 font-medium py-3 px-6 rounded-lg transition-colors duration-150 text-base focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-purple-500 ${
+                        className={`flex-1 font-medium py-2.5 px-5 rounded-lg transition-colors duration-150 text-sm focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-purple-500 ${
                           isDarkMode 
                             ? 'bg-purple-800/60 text-purple-200 hover:bg-purple-700/70' 
                             : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
@@ -1291,7 +1351,7 @@ const ClassDetails = () => {
                 <div className="text-center">
                      <button
                         type="button"
-                        onClick={handleCancelAttendanceProcess} // Cancel goes back to initial state
+                        onClick={handleCancelAttendanceProcess}
                         className={`text-sm font-medium ${isDarkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'}`}
                     >
                         Cancel
@@ -1300,21 +1360,24 @@ const ClassDetails = () => {
             </div>
           )}
 
-          {/* State 3: Marking Mode */}
+          {/* State 3: Marking Mode (Streamlined, no title header) */}
           {isMarkingMode && (
             <div>
-              {/* Marking Header - Now includes selected session type */}
-              <div className={`px-6 py-4 border-b flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 ${
+              {/* Minimal Header - Only shows session type and date */}
+              <div className={`px-3 py-2 border-b ${
                 isDarkMode 
                   ? 'bg-gray-700/50 border-gray-700' 
-                  : 'bg-gray-100/70 border-gray-200'
+                  : 'bg-gray-50 border-gray-200'
               }`}>
-                  <h2 className={`text-xl font-semibold whitespace-nowrap capitalize ${isDarkMode ? 'text-gray-100' : 'text-gray-800'}`}>
-                    Attendance ({currentSessionType}) - {new Date().toLocaleDateString()} {/* Show type */}
-                  </h2>
+                <div className="flex justify-between items-center">
+                  <p className={`text-sm font-medium capitalize ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                    {currentSessionType} - {new Date().toLocaleDateString()}
+                  </p>
+                  <div className="flex space-x-2">
+                    {renderAttendanceRefreshButton()}
                   <button
                     onClick={handleGenerateFrequency}
-                    className={`w-full sm:w-auto flex-shrink-0 font-medium py-2.5 px-5 rounded-md transition-colors duration-150 text-sm focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-purple-500 ${
+                    className={`text-xs font-medium py-1 px-3 rounded transition-colors duration-150 focus:outline-none ${
                       isDarkMode 
                         ? 'bg-purple-800/60 text-purple-200 hover:bg-purple-700/70' 
                         : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
@@ -1323,63 +1386,76 @@ const ClassDetails = () => {
                   >
                     Special Frequency
                   </button>
+                  </div>
+                </div>
               </div>
 
-              {/* Attendance Statistics */}
-              {renderAttendanceStats()}
+              {/* Attendance Statistics - Even more compact */}
+              <div className={`px-3 py-2 border-b ${
+                isDarkMode 
+                  ? 'bg-gray-700/30 border-gray-700' 
+                  : 'bg-gray-50 border-gray-200'
+              }`}>
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-3 mb-1">
+                    <div className={`text-xs ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>
+                      <span className="font-medium">{Object.values(currentDailyAttendance).filter(status => status === 'present').length}</span> Present
+                    </div>
+                    <div className={`text-xs ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>
+                      <span className="font-medium">{Object.values(currentDailyAttendance).filter(status => status === 'absent').length}</span> Absent
+                    </div>
+                  </div>
+                  
+                  <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-green-500" 
+                      style={{ 
+                        width: `${currentClass.studentList?.length ? 
+                          Math.round((Object.values(currentDailyAttendance).filter(status => status === 'present').length / 
+                          currentClass.studentList.length) * 100) : 0}%` 
+                      }}
+                    ></div>
+                  </div>
+                </div>
+              </div>
 
-              {/* Student List - Use sortedStudentList for rendering */}
-              <div className={`divide-y ${isDarkMode ? 'divide-gray-700' : 'divide-gray-200'}`}>
+              {/* Student List - Scrollable section with fixed height */}
+              <div className={`divide-y ${isDarkMode ? 'divide-gray-700' : 'divide-gray-200'} overflow-y-auto h-[60vh]`}>
                 {sortedStudentList.length > 0 ? (
                   sortedStudentList.map((student, index) => renderStudentAttendanceStatus(student, index))
                 ) : (
-                  <p className={`text-center py-8 px-5 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>No students enrolled in this class.</p>
+                  <p className={`text-center py-6 px-4 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>No students enrolled in this class.</p>
                 )}
               </div>
 
-              {/* Action Buttons Footer - Show loading state */}
+              {/* Action Buttons Footer - More compact */}
               {currentClass.studentList?.length > 0 && (
-                  <div className={`px-6 py-5 border-t flex flex-col sm:flex-row justify-end items-center gap-4 ${
-                    isDarkMode 
-                      ? 'bg-gray-700/50 border-gray-700' 
-                      : 'bg-gray-100/70 border-gray-200'
-                  }`}>
-                    <button
-                        type="button"
-                        onClick={handleCancelAttendanceProcess} // Cancel goes back to initial state
-                        className={`w-full sm:w-auto px-6 py-2.5 text-base font-medium border rounded-md shadow-sm transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500 ${
-                          isDarkMode 
-                            ? 'bg-gray-600 border-gray-500 text-gray-200 hover:bg-gray-500 focus:ring-offset-gray-800' 
-                            : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-100 focus:ring-offset-white'
-                        }`}
-                        disabled={attendanceSaving}
-                        title="Cancel Attendance Marking"
-                    >
-                        Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={saveAttendance}
-                      className={`w-full sm:w-auto font-semibold py-2.5 px-6 rounded-md shadow-sm hover:shadow transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 text-base bg-indigo-600 hover:bg-indigo-700 text-white ${
-                        isDarkMode ? 'focus:ring-offset-gray-800' : 'focus:ring-offset-white'
-                      }`}
-                      disabled={attendanceSaving} // Disable button while saving
-                    >
-                      {attendanceSaving ? 'Saving...' : 'Save Attendance'}
-                    </button>
-                  </div>
-              )}
-              {/* Display specific save error or info message */}
-              {attendanceError && (
-                  <p className={`text-sm text-center pt-3 px-6 ${
-                    attendanceError.includes('already been recorded') 
-                      ? isDarkMode ? 'text-blue-400' : 'text-blue-600' 
-                      : isDarkMode ? 'text-red-400' : 'text-red-600'
-                  }`}>
-                    {attendanceError.includes('already been recorded') 
-                      ? 'Viewing existing attendance records' 
-                      : `Error: ${attendanceError}`}
-                  </p>
+                <div className={`px-3 py-3 border-t grid grid-cols-2 gap-2 ${
+                  isDarkMode 
+                    ? 'bg-gray-700/50 border-gray-700' 
+                    : 'bg-gray-50 border-gray-200'
+                }`}>
+                  <button
+                    type="button"
+                    onClick={handleCancelAttendanceProcess}
+                    className={`w-full py-2.5 text-sm font-medium border rounded shadow-sm transition-colors duration-150 focus:outline-none ${
+                      isDarkMode 
+                        ? 'bg-gray-600 border-gray-500 text-gray-200 hover:bg-gray-500' 
+                        : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-100'
+                    }`}
+                    disabled={attendanceSaving}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={saveAttendance}
+                    className={`w-full font-medium py-2.5 rounded shadow-sm hover:shadow transition-all duration-150 focus:outline-none text-sm bg-indigo-600 hover:bg-indigo-700 text-white`}
+                    disabled={attendanceSaving}
+                  >
+                    {attendanceSaving ? 'Saving...' : 'Save Attendance'}
+                  </button>
+                </div>
               )}
             </div>
           )}
@@ -1447,67 +1523,51 @@ const ClassDetails = () => {
                 <div className={`flex justify-between items-center p-4 border-b ${
                   isDarkMode ? 'border-gray-700' : 'border-gray-200'
                 }`}>
-                  <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-800'}`}>Frequency Sound</h2>
+                  <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-800'}`}>Generated Frequency</h2>
                   <button onClick={closeFrequencyPopup} className={`${isDarkMode ? 'text-gray-400 hover:text-gray-100' : 'text-gray-500 hover:text-gray-800'}`}><FiX size={20}/></button>
                 </div>
                 <div className="p-6">
-                  <div className={`mb-5 p-4 rounded-lg border ${
-                    isDarkMode 
-                      ? 'bg-indigo-900/30 border-indigo-700/50' 
-                      : 'bg-indigo-50 border-indigo-200'
-                  }`}>
-                    <h3 className={`text-sm font-medium mb-1 ${isDarkMode ? 'text-indigo-300' : 'text-indigo-700'}`}>Active Frequency</h3>
-                    <span className={`text-3xl font-semibold font-mono ${isDarkMode ? 'text-indigo-300' : 'text-indigo-600'}`}>
-                      {classFrequencies[currentClass._id]?.[0] || '---'} Hz
-                    </span>
+                  <div className="mb-6">
+                    <div className={`text-6xl font-mono font-bold mb-1 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
+                      {classFrequencies[currentClass._id]?.[0] || '...'}
+                    </div>
+                    <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Hz</p>
                   </div>
-                  
-                  {/* For teacher: play button */}
-                  {isClassTeacher && (
-                    <>
-                      <button
-                        onClick={togglePlaySound}
-                        className={`inline-flex items-center justify-center w-16 h-16 rounded-full shadow-lg text-white transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-                          isPlaying 
-                            ? 'bg-red-600 hover:bg-red-700 focus:ring-red-500' 
-                            : 'bg-green-600 hover:bg-green-700 focus:ring-green-500'
-                        } ${isDarkMode ? 'focus:ring-offset-gray-800' : 'focus:ring-offset-white'}`}
-                        aria-label={isPlaying ? 'Pause sound' : 'Play sound'}
-                      >
-                        {isPlaying ? <FiPause className="w-7 h-7" /> : <FiPlay className="w-7 h-7 pl-1" />}
-                      </button>
-                      <p className={`mt-4 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                        {isPlaying ? "Playing..." : "Click to play sound"}
-                      </p>
-                    </>
-                  )}
-                  
-                  {/* For student: mark attendance button */}
-                  {!isClassTeacher && user?.user?.role === 'student' && (
-                    <>
-                      <button
-                        onClick={handleMarkAttendanceWithFrequency}
-                        className={`mt-2 w-full font-medium py-3 px-6 rounded-lg shadow-md text-white transition-colors duration-150 text-base focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-green-500 bg-green-600 hover:bg-green-700 ${
-                          isDarkMode ? 'focus:ring-offset-gray-800' : 'focus:ring-offset-white'
-                        }`}
-                      >
-                        Mark Attendance
-                      </button>
-                      <p className={`mt-4 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                        Play this frequency and click the button to mark your attendance
-                      </p>
-                      <button
-                        onClick={togglePlaySound}
-                        className={`mt-4 inline-flex items-center justify-center px-4 py-2 rounded-md shadow-md text-white transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-                          isPlaying 
-                            ? 'bg-red-600 hover:bg-red-700 focus:ring-red-500' 
-                            : 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500'
-                        } ${isDarkMode ? 'focus:ring-offset-gray-800' : 'focus:ring-offset-white'}`}
-                        aria-label={isPlaying ? 'Stop sound' : 'Play sound'}
-                      >
-                        {isPlaying ? <><FiPause className="w-4 h-4 mr-2" /> Stop Sound</> : <><FiPlay className="w-4 h-4 mr-2" /> Play Sound</>}
-                      </button>
-                    </>
+
+                  <div className="flex justify-center space-x-4 mb-6">
+                    <button
+                      onClick={togglePlaySound}
+                      className={`inline-flex items-center justify-center px-4 py-2 rounded-md shadow transition-colors duration-150 ${
+                        isDarkMode 
+                          ? isPlaying ? 'bg-red-700 text-white' : 'bg-blue-700 text-white' 
+                          : isPlaying ? 'bg-red-600 text-white' : 'bg-blue-600 text-white'
+                      }`}
+                    >
+                      {isPlaying ? 'Stop Sound' : 'Play Sound'}
+                    </button>
+
+                    <button
+                      onClick={() => setShowSMSForm(true)}
+                      className={`inline-flex items-center justify-center px-4 py-2 rounded-md shadow transition-colors duration-150 ${
+                        isDarkMode 
+                          ? 'bg-gray-700 text-gray-200 hover:bg-gray-600' 
+                          : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                      }`}
+                    >
+                      <FiMessageSquare className="mr-1.5" />
+                      Send SMS
+                    </button>
+                  </div>
+
+                  {/* Only show Attend button for students */}
+                  {!isClassTeacher && (
+                    <button
+                      onClick={handleMarkAttendanceWithFrequency}
+                      className="w-full py-2.5 px-4 bg-green-600 hover:bg-green-700 text-white font-medium rounded-md shadow transition-colors duration-150"
+                      disabled={!classFrequencies[currentClass._id]?.[0]}
+                    >
+                      Mark Me Present
+                    </button>
                   )}
                 </div>
              </div>

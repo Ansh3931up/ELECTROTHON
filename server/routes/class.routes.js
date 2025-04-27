@@ -13,7 +13,8 @@ import {
   getTeacherSchedule,
   startAttendanceSession,
   endAttendanceSession,
-  getAttendanceByDateAndType
+  getAttendanceByDateAndType,
+  getOngoingAttendance
 } from "../controllers/class.controllers.js";
 import upload from "../middlewares/multer.middleware.js";
 // import { checkRole } from '../middleware/role.middleware.js';
@@ -38,6 +39,7 @@ router.post('/attendance/start-session', verifyJWT, startAttendanceSession);
 router.post('/attendance/end-session', verifyJWT, endAttendanceSession);
 router.post('/attendance/mark-by-frequency', markStudentPresentByFrequency);
 router.get('/:classId/attendance', getAttendanceByDateAndType);
+router.get('/:classId/ongoing-attendance', getOngoingAttendance);
 
 // Note: Placed *before* the generic /:classId GET route to avoid conflict
 router.post('/:classId/attendance', saveDailyAttendance);

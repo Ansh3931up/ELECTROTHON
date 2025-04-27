@@ -252,16 +252,19 @@ export const startAttendanceSession = createAsyncThunk(
 // New thunk for ending an attendance session
 export const endAttendanceSession = createAsyncThunk(
   "class/endAttendanceSession",
-  // Expects { classId }
-  async (sessionData, { rejectWithValue }) => {
+  // Expects { classId, sessionType }
+  async ({ classId, sessionType }, { rejectWithValue }) => {
     try {
       const token = localStorage.getItem("token");
-      const response = await axios.post(`${API_URL}/attendance/end-session`, sessionData, {
+      const response = await axios.post(`${API_URL}/attendance/end-session`, 
+        { classId, sessionType },
+        {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-      });
+        }
+      );
       return response.data;
     } catch (error) {
       const message = error.response?.data?.message || error.message || error.toString();
@@ -321,6 +324,40 @@ export const fetchTeacherSchedule = createAsyncThunk(
     }
 );
 
+// New thunk for fetching ongoing attendance data
+export const fetchOngoingAttendance = createAsyncThunk(
+  "class/fetchOngoingAttendance",
+  // Expects classId and optional sessionType
+  async ({ classId, sessionType }, { rejectWithValue }) => {
+    try {
+      const token = localStorage.getItem("token");
+      
+      // Build the URL with query parameters if sessionType is provided
+      let url = `${API_URL}/${classId}/ongoing-attendance`;
+      if (sessionType) {
+        url += `?sessionType=${sessionType}`;
+      }
+      
+      const response = await axios.get(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      
+      return response.data.data;
+    } catch (error) {
+      console.error("Error fetching ongoing attendance:", error);
+      
+      const errorMessage = error.response?.data?.message || 
+                          error.response?.data?.error || 
+                          error.message || 
+                          'Unknown error fetching attendance data';
+                          
+      return rejectWithValue(errorMessage);
+        }
+    }
+);
+
 const classSlice = createSlice({
   name: "class",
   initialState: {
@@ -338,6 +375,9 @@ const classSlice = createSlice({
         loading: false,
         error: null,
     },
+    ongoingAttendance: null,
+    fetchingOngoingAttendance: false,
+    ongoingAttendanceError: null,
   },
   reducers: {
     setSelectedClass: (state, action) => {
@@ -353,7 +393,11 @@ const classSlice = createSlice({
     // Potentially add a reducer to clear teacher schedule if needed
     clearTeacherSchedule: (state) => {
          state.teacherSchedule = { data: [], loading: false, error: null };
-    }
+    },
+    clearOngoingAttendance: (state) => {
+      state.ongoingAttendance = null;
+      state.ongoingAttendanceError = null;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -503,9 +547,22 @@ const classSlice = createSlice({
         state.teacherSchedule.loading = false;
         state.teacherSchedule.error = action.payload;
         state.teacherSchedule.data = []; // Clear data on error
+      })
+      // Handle fetchOngoingAttendance states
+      .addCase(fetchOngoingAttendance.pending, (state) => {
+        state.fetchingOngoingAttendance = true;
+        state.ongoingAttendanceError = null;
+      })
+      .addCase(fetchOngoingAttendance.fulfilled, (state, action) => {
+        state.fetchingOngoingAttendance = false;
+        state.ongoingAttendance = action.payload;
+      })
+      .addCase(fetchOngoingAttendance.rejected, (state, action) => {
+        state.fetchingOngoingAttendance = false;
+        state.ongoingAttendanceError = action.payload;
       });
   },
 });
 
-export const { setSelectedClass, clearCurrentClass, clearAttendanceError, clearTeacherSchedule } = classSlice.actions;
+export const { setSelectedClass, clearCurrentClass, clearAttendanceError, clearTeacherSchedule, clearOngoingAttendance } = classSlice.actions;
 export default classSlice.reducer;
