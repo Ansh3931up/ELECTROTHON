@@ -15,6 +15,7 @@ import Signup from './pages/signUp';
 import SignupCheck from './pages/SignupCheck';
 import SplashScreen from './pages/SplashScreen';
 import Student from './pages/student';
+import StudentAttendance from "./pages/StudentAttendance";
 import Teacher from './pages/Teacher';
 import TeacherTimetable from './pages/TeacherTimetable';
 
@@ -147,6 +148,7 @@ function App() {
               {/* Student Routes */}
               <Route element={<RoleRoute allowedRoles={["student"]} />}>
                 <Route path="/student" element={<Student />} />
+                <Route path="/student-attendance" element={<StudentAttendance />} />
               </Route>
             </Route>
           </Route>

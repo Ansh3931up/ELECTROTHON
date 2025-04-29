@@ -176,7 +176,7 @@ const BottomNavBar = ({ user }) => {
   const studentNavItems = [
     { label: 'Home', path: '/student', icon: <FiHome size={20} /> },
     { label: 'Classes', path: '/student', icon: <FiBook size={20} /> },
-    { label: 'Attendance', path: '/student', icon: <FiCalendar size={20} /> },
+    { label: 'Attendance', path: '/student-attendance', icon: <FiCalendar size={20} /> },
     { label: 'Profile', path: '/student', icon: <FiUser size={20} /> },
   ];
   

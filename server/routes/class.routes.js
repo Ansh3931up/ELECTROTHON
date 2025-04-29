@@ -14,7 +14,8 @@ import {
   startAttendanceSession,
   endAttendanceSession,
   getAttendanceByDateAndType,
-  getOngoingAttendance
+  getOngoingAttendance,
+  getStudentTotalAttendance
 } from "../controllers/class.controllers.js";
 
 const router = Router();
@@ -27,6 +28,9 @@ router.get('/frequency/:classId', getClassfrequency); //in use
 // New routes for getting classes
 router.get('/teacher/:teacherId', getTeacherClasses); //in use
 router.get('/student/:studentId', getStudentClasses); //in use
+
+// --- NEW ROUTE for Student's Total Attendance ---
+router.get('/student/:studentId/total-attendance', getStudentTotalAttendance);
 
 // --- NEW ROUTE for Teacher's Schedule ---
 router.get('/my-schedule', verifyJWT, getTeacherSchedule); //in use

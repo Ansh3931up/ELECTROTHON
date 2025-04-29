@@ -1099,3 +1099,112 @@ export const getOngoingAttendance = async (req, res, next) => {
     return next(new AppError(error.message || "Failed to fetch attendance data", 500));
     }
 };
+
+// Get total attendance for a student across all classes
+export const getStudentTotalAttendance = asyncHandler(async (req, res) => {
+  try {
+    const { studentId } = req.params;
+
+    // Find all classes where this student is enrolled
+    const classes = await Class.find({ 
+      studentList: studentId,
+      status: { $ne: 'ended' } // Only consider active and inactive classes
+    });
+
+    // Initialize response data structure
+    const attendanceData = {
+      totalClasses: classes.length,
+      classesAttendance: [],
+      overallStats: {
+        totalLectures: 0,
+        totalLabs: 0,
+        presentLectures: 0,
+        presentLabs: 0,
+        attendancePercentage: 0
+      }
+    };
+
+    // Process each class
+    for (const classObj of classes) {
+      const classAttendance = {
+        classId: classObj._id,
+        className: classObj.className,
+        classCode: classObj.classCode,
+        lectures: {
+          total: 0,
+          present: 0,
+          percentage: 0
+        },
+        labs: {
+          total: 0,
+          present: 0,
+          percentage: 0
+        }
+      };
+
+      // Process attendance records for this class
+      classObj.attendanceRecords.forEach(record => {
+        // Process lecture attendance
+        if (record.lecture && record.lecture.records) {
+          classAttendance.lectures.total++;
+          attendanceData.overallStats.totalLectures++;
+          
+          const studentRecord = record.lecture.records.find(r => 
+            r.studentId.toString() === studentId && r.status === 'present'
+          );
+          
+          if (studentRecord) {
+            classAttendance.lectures.present++;
+            attendanceData.overallStats.presentLectures++;
+          }
+        }
+
+        // Process lab attendance
+        if (record.lab && record.lab.records) {
+          classAttendance.labs.total++;
+          attendanceData.overallStats.totalLabs++;
+          
+          const studentRecord = record.lab.records.find(r => 
+            r.studentId.toString() === studentId && r.status === 'present'
+          );
+          
+          if (studentRecord) {
+            classAttendance.labs.present++;
+            attendanceData.overallStats.presentLabs++;
+          }
+        }
+      });
+
+      // Calculate percentages for this class
+      if (classAttendance.lectures.total > 0) {
+        classAttendance.lectures.percentage = (classAttendance.lectures.present / classAttendance.lectures.total) * 100;
+      }
+      if (classAttendance.labs.total > 0) {
+        classAttendance.labs.percentage = (classAttendance.labs.present / classAttendance.labs.total) * 100;
+      }
+
+      attendanceData.classesAttendance.push(classAttendance);
+    }
+
+    // Calculate overall attendance percentage
+    const totalSessions = attendanceData.overallStats.totalLectures + attendanceData.overallStats.totalLabs;
+    const totalPresent = attendanceData.overallStats.presentLectures + attendanceData.overallStats.presentLabs;
+    
+    if (totalSessions > 0) {
+      attendanceData.overallStats.attendancePercentage = (totalPresent / totalSessions) * 100;
+    }
+
+    res.status(200).json({
+      success: true,
+      data: attendanceData
+    });
+
+  } catch (error) {
+    console.error('Error fetching total attendance:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch attendance data',
+      error: error.message
+    });
+  }
+});

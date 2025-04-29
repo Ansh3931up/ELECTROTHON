@@ -358,6 +358,26 @@ export const fetchOngoingAttendance = createAsyncThunk(
     }
 );
 
+// New thunk for fetching student's total attendance
+export const fetchStudentTotalAttendance = createAsyncThunk(
+  "class/fetchStudentTotalAttendance",
+  async (studentId, { rejectWithValue }) => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await axios.get(`${API_URL}/student/${studentId}/total-attendance`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      
+      return response.data.data;
+    } catch (error) {
+      console.error("Error fetching total attendance:", error);
+      return rejectWithValue(error.response?.data?.message || 'Failed to fetch attendance data');
+    }
+  }
+);
+
 const classSlice = createSlice({
   name: "class",
   initialState: {
@@ -378,6 +398,10 @@ const classSlice = createSlice({
     ongoingAttendance: null,
     fetchingOngoingAttendance: false,
     ongoingAttendanceError: null,
+    // Add new state for total attendance
+    totalAttendance: null,
+    fetchingTotalAttendance: false,
+    totalAttendanceError: null,
   },
   reducers: {
     setSelectedClass: (state, action) => {
@@ -397,6 +421,10 @@ const classSlice = createSlice({
     clearOngoingAttendance: (state) => {
       state.ongoingAttendance = null;
       state.ongoingAttendanceError = null;
+    },
+    clearTotalAttendance: (state) => {
+      state.totalAttendance = null;
+      state.totalAttendanceError = null;
     },
   },
   extraReducers: (builder) => {
@@ -560,9 +588,22 @@ const classSlice = createSlice({
       .addCase(fetchOngoingAttendance.rejected, (state, action) => {
         state.fetchingOngoingAttendance = false;
         state.ongoingAttendanceError = action.payload;
+      })
+      // Add cases for fetchStudentTotalAttendance
+      .addCase(fetchStudentTotalAttendance.pending, (state) => {
+        state.fetchingTotalAttendance = true;
+        state.totalAttendanceError = null;
+      })
+      .addCase(fetchStudentTotalAttendance.fulfilled, (state, action) => {
+        state.fetchingTotalAttendance = false;
+        state.totalAttendance = action.payload;
+      })
+      .addCase(fetchStudentTotalAttendance.rejected, (state, action) => {
+        state.fetchingTotalAttendance = false;
+        state.totalAttendanceError = action.payload;
       });
   },
 });
 
-export const { setSelectedClass, clearCurrentClass, clearAttendanceError, clearTeacherSchedule, clearOngoingAttendance } = classSlice.actions;
+export const { setSelectedClass, clearCurrentClass, clearAttendanceError, clearTeacherSchedule, clearOngoingAttendance, clearTotalAttendance } = classSlice.actions;
 export default classSlice.reducer;
