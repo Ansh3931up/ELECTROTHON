@@ -9,13 +9,12 @@ import {
   getAllSchoolCodes,
   updateFaceData
 } from "../controllers/user.controllers.js";
-import { verifyJWT } from "../middlewares/auth.middleware.js";
-import upload from "../middlewares/multer.middleware.js";
+// import { verifyJWT } from "../middlewares/auth.middleware.js";
 
 const router = Router();
 
 // Authentication routes
-router.post("/register", upload.none(), registerUser);
+router.post("/register",  registerUser);
 router.post("/login", login);
 router.get("/logout", logout);
 

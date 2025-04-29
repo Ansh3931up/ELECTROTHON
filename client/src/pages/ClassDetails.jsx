@@ -12,7 +12,7 @@ import {
   generatefrequency,
   fetchOngoingAttendance
 } from "../redux/slices/classSlice";
-import { sendFrequencySMS, storeOfflineFrequency } from "../utils/offlineMode";
+
 import { 
   endAttendance,
   fetchAttendanceData,

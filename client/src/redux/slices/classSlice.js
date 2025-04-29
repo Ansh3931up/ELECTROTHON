@@ -134,63 +134,64 @@ export const fetchClassDetails = createAsyncThunk(
 );
 
 // Update saveDailyAttendance thunk payload
-export const saveDailyAttendance = createAsyncThunk(
-  "class/saveAttendance",
-  // Expects { classId, date, sessionType, attendanceList, recordedBy, markCompleted }
-  async (attendanceData, { rejectWithValue }) => {
-    try {
-      const { classId, ...payload } = attendanceData; // payload now includes date, sessionType, attendanceList, recordedBy, markCompleted
-      const token = localStorage.getItem("token");
+// export const saveDailyAttendance = createAsyncThunk(
+//   "class/saveAttendance",
+//   // Expects { classId, date, sessionType, attendanceList, recordedBy, markCompleted }
+//   async (attendanceData, { rejectWithValue }) => {
+//     try {
+//       const { classId, ...payload } = attendanceData; // payload now includes date, sessionType, attendanceList, recordedBy, markCompleted
+//       const token = localStorage.getItem("token");
 
-      const response = await axios.post(`${API_URL}/${classId}/attendance`, payload, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
+//       const response = await axios.post(`${API_URL}/${classId}/attendance`, payload, {
+//         headers: {
+//           Authorization: `Bearer ${token}`,
+//           'Content-Type': 'application/json',
+//         },
+//       });
       
-      // Check if the response indicates that attendance was already recorded
-      const result = response.data;
-      if (result.alreadyRecorded) {
-        // Return the existing records as part of our response
-        return { 
-          classId, 
-          date: payload.date, 
-          sessionType: payload.sessionType, 
-          alreadyRecorded: true,
-          data: result.data 
-        };
-      }
+//       // Check if the response indicates that attendance was already recorded
+//       const result = response.data;
+//       if (result.alreadyRecorded) {
+//         // Return the existing records as part of our response
+//         return { 
+//           classId, 
+//           date: payload.date, 
+//           sessionType: payload.sessionType, 
+//           alreadyRecorded: true,
+//           data: result.data 
+//         };
+//       }
       
-      // Standard response for newly saved attendance
-      return { 
-        classId, 
-        date: payload.date, 
-        sessionType: payload.sessionType, 
-        alreadyRecorded: false,
-        responseData: result,
-        active: result.active // Include active state from response
-      };
-    } catch (error) {
-      // Handle errors
-      const message =
-        (error.response &&
-          error.response.data &&
-          error.response.data.message) ||
-        error.message ||
-        error.toString();
-      // Include the original data for potential UI feedback
-      return rejectWithValue({ message, originalData: attendanceData });
-    }
-  }
-);
+//       // Standard response for newly saved attendance
+//       return { 
+//         classId, 
+//         date: payload.date, 
+//         sessionType: payload.sessionType, 
+//         alreadyRecorded: false,
+//         responseData: result,
+//         active: result.active // Include active state from response
+//       };
+//     } catch (error) {
+//       // Handle errors
+//       const message =
+//         (error.response &&
+//           error.response.data &&
+//           error.response.data.message) ||
+//         error.message ||
+//         error.toString();
+//       // Include the original data for potential UI feedback
+//       return rejectWithValue({ message, originalData: attendanceData });
+//     }
+//   }
+// );
+//not in use the above one  
+
 
 // <<< NEW THUNK for student marking >>>
 export const markStudentPresentByFrequency = createAsyncThunk(
   "class/markStudentPresent",
   // Expects { classId, studentId, detectedFrequency, sessionType }
   async (markData, { rejectWithValue }) => {
-    console.log("markStudentPresentByFrequency", markData);
     try {
       const token = localStorage.getItem("token"); // Or however student auth is handled
 
@@ -200,7 +201,6 @@ export const markStudentPresentByFrequency = createAsyncThunk(
         sessionType: markData.sessionType || 'lecture'
       };
 
-      console.log("Marking student present with data:", dataToSend);
 
       // Call the backend endpoint
       const response = await axios.post(`${API_URL}/attendance/mark-by-frequency`, dataToSend, {
@@ -218,60 +218,60 @@ export const markStudentPresentByFrequency = createAsyncThunk(
 );
 
 // New thunk for starting an attendance session
-export const startAttendanceSession = createAsyncThunk(
-  "class/startAttendanceSession",
-  // Expects { classId, sessionType }
-  async ({ classId, sessionType }, { rejectWithValue }) => {
-    try {
-      const token = localStorage.getItem("token");
-      const response = await axios.post(`${API_URL}/attendance/start-session`, {
-        classId,
-        sessionType
-      }, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
+// export const startAttendanceSession = createAsyncThunk(
+//   "class/startAttendanceSession",
+//   // Expects { classId, sessionType }
+//   async ({ classId, sessionType }, { rejectWithValue }) => {
+//     try {
+//       const token = localStorage.getItem("token");
+//       const response = await axios.post(`${API_URL}/attendance/start-session`, {
+//         classId,
+//         sessionType
+//       }, {
+//         headers: {
+//           Authorization: `Bearer ${token}`,
+//           'Content-Type': 'application/json',
+//         },
+//       });
       
-      return response.data;
-    } catch (error) {
-      console.error("Error starting attendance session:", error);
+//       return response.data;
+//     } catch (error) {
+//       console.error("Error starting attendance session:", error);
       
-      // Extract the error message to provide more helpful feedback
-      const errorMessage = error.response?.data?.message || 
-                          error.response?.data?.error || 
-                          error.message || 
-                          'Unknown error starting attendance session';
+//       // Extract the error message to provide more helpful feedback
+//       const errorMessage = error.response?.data?.message || 
+//                           error.response?.data?.error || 
+//                           error.message || 
+//                           'Unknown error starting attendance session';
                           
-      return rejectWithValue(errorMessage);
-    }
-  }
-);
+//       return rejectWithValue(errorMessage);
+//     }
+//   }
+// );
 
 // New thunk for ending an attendance session
-export const endAttendanceSession = createAsyncThunk(
-  "class/endAttendanceSession",
-  // Expects { classId, sessionType }
-  async ({ classId, sessionType }, { rejectWithValue }) => {
-    try {
-      const token = localStorage.getItem("token");
-      const response = await axios.post(`${API_URL}/attendance/end-session`, 
-        { classId, sessionType },
-        {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        }
-      );
-      return response.data;
-    } catch (error) {
-      const message = error.response?.data?.message || error.message || error.toString();
-      return rejectWithValue(message);
-    }
-  }
-);
+// export const endAttendanceSession = createAsyncThunk(
+//   "class/endAttendanceSession",
+//   // Expects { classId, sessionType }
+//   async ({ classId, sessionType }, { rejectWithValue }) => {
+//     try {
+//       const token = localStorage.getItem("token");
+//       const response = await axios.post(`${API_URL}/attendance/end-session`, 
+//         { classId, sessionType },
+//         {
+//         headers: {
+//           Authorization: `Bearer ${token}`,
+//           'Content-Type': 'application/json',
+//         },
+//         }
+//       );
+//       return response.data;
+//     } catch (error) {
+//       const message = error.response?.data?.message || error.message || error.toString();
+//       return rejectWithValue(message);
+//     }
+//   }
+// );
 
 // <<< UPDATED THUNK for editing class >>>
 export const editClassDetails = createAsyncThunk(
@@ -479,24 +479,24 @@ const classSlice = createSlice({
         state.currentClass = null;
       })
       // <<< NEW CASES for saveDailyAttendance >>>
-      .addCase(saveDailyAttendance.pending, (state) => {
-        state.attendanceSaving = true; // Set specific loading state
-        state.attendanceError = null; // Clear previous save errors
-      })
-      .addCase(saveDailyAttendance.fulfilled, (state, action) => {
-        state.attendanceSaving = false;
-        state.attendanceError = null;
-        // NOTE: Updating the nested attendanceRecords in the Redux state
-        // becomes much more complex here. It's often simpler to just
-        // re-fetch the class details after a successful save to ensure consistency,
-        // rather than trying to merge the updates manually in the reducer.
-        console.log("Attendance saved successfully via Redux:", action.payload);
-      })
-      .addCase(saveDailyAttendance.rejected, (state, action) => {
-        state.attendanceSaving = false;
-        state.attendanceError = action.payload.message; // Store specific save error
-        console.error("Attendance save failed via Redux:", action.payload);
-      })
+      // .addCase(saveDailyAttendance.pending, (state) => {
+      //   state.attendanceSaving = true; // Set specific loading state
+      //   state.attendanceError = null; // Clear previous save errors
+      // })
+      // .addCase(saveDailyAttendance.fulfilled, (state, action) => {
+      //   state.attendanceSaving = false;
+      //   state.attendanceError = null;
+      //   // NOTE: Updating the nested attendanceRecords in the Redux state
+      //   // becomes much more complex here. It's often simpler to just
+      //   // re-fetch the class details after a successful save to ensure consistency,
+      //   // rather than trying to merge the updates manually in the reducer.
+      //   console.log("Attendance saved successfully via Redux:", action.payload);
+      // })
+      // .addCase(saveDailyAttendance.rejected, (state, action) => {
+      //   state.attendanceSaving = false;
+      //   state.attendanceError = action.payload.message; // Store specific save error
+      //   console.error("Attendance save failed via Redux:", action.payload);
+      // })
       // <<< Add Cases for markStudentPresentByFrequency (optional) >>>
       // You might not need specific loading/error state for this in the *class* slice,
       // as the primary feedback is just success/failure to the student component.

@@ -8,7 +8,8 @@ const asyncHandler = expressAsyncHandler;
 
 
 
-// Create a class by a teacher
+// Create a class by a teacher and for now it is using the student list and selecting that student 
+// TODO: make the use of class code to join and get the resources.
 export const registerClass = async (req, res, next) => 
   {
     console.log("Received class data:", req.body);
@@ -88,7 +89,7 @@ export const registerClass = async (req, res, next) =>
   }
 };
 
-
+// this is an important function for auto listening the route of the student side properly 
 export const generateAttendance = async (req, res) => {
   try {
     const { classId, teacherId, frequency, autoActivate = false } = req.body;
@@ -235,6 +236,8 @@ export const getStudentClasses = async (req, res, next) => {
 };
 
 // <<< NEW FUNCTION to get details for a specific class >>>
+// I am using this eorute to get the detail fo the class before editing the class details
+
 export const getClassDetails = async (req, res, next) => {
   try {
     const { classId } = req.params;
@@ -410,7 +413,7 @@ export const markStudentPresentByFrequency = asyncHandler(async (req, res) => {
   const { classId, studentId, detectedFrequency, sessionType: requestedSessionType } = req.body;
 
   // Input validation
-  if (!classId || !studentId || !detectedFrequency) {
+  if (!classId || !studentId || !detectedFrequency || !requestedSessionType) {
     return res.status(400).json({ message: 'All fields required' });
   }
 
@@ -501,8 +504,8 @@ export const markStudentPresentByFrequency = asyncHandler(async (req, res) => {
     // Create the student attendance object with the required fields
     const studentAttendance = {
                 studentId: studentId,
-      status: 'present',
-      recordedBy: classDoc.teacherId, // Teacher ID as the recorder
+                status: 'present',
+                recordedBy: classDoc.teacherId, // Teacher ID as the recorder
                 recordedAt: new Date()
             };
 
@@ -546,7 +549,7 @@ export const markStudentPresentByFrequency = asyncHandler(async (req, res) => {
 });
 
 // Add a new function to start an attendance session
-export const startAttendanceSession = asyncHandler(async (req, res) => {
+export const  startAttendanceSession = asyncHandler(async (req, res) => {
   const { classId, sessionType } = req.body;
   const teacherId = req.user?.id;
 
@@ -664,10 +667,10 @@ export const startAttendanceSession = asyncHandler(async (req, res) => {
 
     return res.status(200).json({
             success: true,
-      message: `${sessionType.charAt(0).toUpperCase() + sessionType.slice(1)} attendance session started`,
-      sessionData: {
-        sessionType,
-        startedAt: new Date().toISOString()
+            message: `${sessionType.charAt(0).toUpperCase() + sessionType.slice(1)} attendance session started`,
+            sessionData: {
+            sessionType,
+            startedAt: new Date().toISOString()
       }
         });
 

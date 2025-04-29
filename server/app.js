@@ -7,7 +7,7 @@ import userRoutes from "./routes/user.routes.js";
 // import studentRoutes from "./routes/student.routes.js";
 import classRoutes from "./routes/class.routes.js";
 import errorMiddleware from "./middlewares/error.middleware.js";
-import smsRoutes from './routes/smsRoutes.js';
+
 
 config();
 
@@ -51,7 +51,6 @@ app.use("/ping", function (req, res) {
 app.use("/api/v1/user", userRoutes);
 app.use("/api/v1/class", classRoutes);
 // app.use("/api/v1/student", studentRoutes);
-app.use('/api/sms', smsRoutes);
 
 app.all("*", (req, res) => {
   res.status(404).send("OOPS! 404 PAGE NOT FOUND");
