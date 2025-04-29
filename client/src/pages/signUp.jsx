@@ -1,9 +1,10 @@
-import { useDispatch, useSelector } from "react-redux";
-import { Link, useNavigate } from 'react-router-dom';
 import { useState } from "react";
-import { FiEye, FiEyeOff, FiArrowRight } from 'react-icons/fi';
+import { Link, useNavigate } from 'react-router-dom';
+import { useDispatch, useSelector } from "react-redux";
+import { FiEye, FiEyeOff, FiArrowRight, FiUser, FiMail, FiPhone, FiLock, FiBookmark } from 'react-icons/fi';
 import { signupUser } from "../redux/slices/authSlice";
 import { useTheme } from '../context/ThemeContext';
+import { motion } from 'framer-motion';
 
 const Signup = () => {
   const dispatch = useDispatch();
@@ -23,30 +24,89 @@ const Signup = () => {
   const [validationErrors, setValidationErrors] = useState({});
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [focused, setFocused] = useState({});
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData({ ...formData, [name]: value });
-    if (validationErrors[name]) {
-      setValidationErrors({ ...validationErrors, [name]: '' });
+    validateField(name, value);
+  };
+
+  const validateField = (name, value) => {
+    let errors = { ...validationErrors };
+    
+    switch(name) {
+      case 'fullName':
+        if (!value || value.trim() === '') {
+          errors.fullName = 'Full name is required';
+        } else if (value.length < 3) {
+          errors.fullName = 'Name must be at least 3 characters';
+        } else {
+          delete errors.fullName;
+        }
+        break;
+      case 'email':
+        if (!value || !value.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+          errors.email = 'Valid email is required';
+        } else {
+          delete errors.email;
+        }
+        break;
+      case 'phone':
+        if (!value || value.trim() === '') {
+          errors.phone = 'Phone number is required';
+        } else if (!value.match(/^\d{10}$/)) {
+          errors.phone = 'Enter a valid 10-digit phone number';
+        } else {
+          delete errors.phone;
+        }
+        break;
+      case 'password':
+        if (!value) {
+          errors.password = 'Password is required';
+        } else if (value.length < 6) {
+          errors.password = 'Password must be at least 6 characters';
+        } else if (!value.match(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{6,}$/)) {
+          errors.password = 'Password must contain uppercase, lowercase and numbers';
+        } else {
+          delete errors.password;
+        }
+        break;
+      case 'schoolCode':
+        if (!value || value.trim() === '') {
+          errors.schoolCode = 'School code is required';
+        } else {
+          delete errors.schoolCode;
+        }
+        break;
+      default:
+        break;
     }
+    
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
   const validateForm = () => {
-    const errors = {};
-    if (!formData.fullName || formData.fullName.trim() === '') 
-      errors.fullName = 'Full name is required';
-    if (!formData.email || !formData.email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) 
-      errors.email = 'Valid email is required';
-    if (!formData.phone || formData.phone.trim() === '') 
-      errors.phone = 'Phone number is required';
-    if (!formData.password || formData.password.length < 6) 
-      errors.password = 'Password must be at least 6 characters';
-    if (!formData.schoolCode || formData.schoolCode.trim() === '') 
-      errors.schoolCode = 'School code is required';
+    let isValid = true;
+    
+    // Validate all fields
+    Object.keys(formData).forEach(field => {
+      if (!validateField(field, formData[field])) {
+        isValid = false;
+      }
+    });
+    
+    return isValid;
+  };
 
-    setValidationErrors(errors);
-    return Object.keys(errors).length === 0;
+  const handleFocus = (name) => {
+    setFocused({ ...focused, [name]: true });
+  };
+
+  const handleBlur = (name) => {
+    setFocused({ ...focused, [name]: false });
+    validateField(name, formData[name]);
   };
 
   const handleSubmit = async (e) => {
@@ -56,259 +116,304 @@ const Signup = () => {
     setSubmitSuccess(false);
 
     try {
-      // Dispatch the signupUser action with form data
       const response = await dispatch(signupUser(formData)).unwrap();
-      console.log("signup response",response);
+      console.log("signup response", response);
       setSubmitSuccess(true);
       setTimeout(() => {
         navigate('/login');
       }, 2000);
-
     } catch (err) {
       console.error('Signup error:', err);
       setSubmitSuccess(false);
     }
   };
 
+  const getInputClassName = (fieldName) => {
+    const baseClass = `w-full py-3.5 pl-12 pr-4 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 ${
+      isDarkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-800'
+    }`;
+    
+    if (validationErrors[fieldName] && focused[fieldName] !== true) {
+      return `${baseClass} border-2 border-red-500 focus:ring-red-400`;
+    }
+    
+    return `${baseClass} border border-transparent focus:ring-indigo-500 ${
+      isDarkMode ? 'focus:border-indigo-500' : 'focus:border-indigo-500'
+    }`;
+  };
+
   return (
-    <div className={`min-h-screen pb-40  h-full ${isDarkMode ? 'bg-gray-900' : 'bg-gray-100'} relative overflow-hidden`}>
-      {/* Background pattern dots */}
-      <div className="absolute top-0 right-0 grid grid-cols-10 gap-2 p-4 opacity-20">
-        {[...Array(20)].map((_, i) => (
-          <div key={i} className="h-1 w-1 rounded-full bg-blue-500"></div>
-        ))}
-      </div>
-      
-      {/* Abstract shapes for background */}
-      <div className="absolute top-20 left-20 w-32 h-32 rounded-full bg-blue-800/20 blur-xl"></div>
-      <div className="absolute bottom-40 right-10 w-40 h-40 rounded-full bg-indigo-800/20 blur-xl"></div>
+    <div className={`min-h-screen pb-20 ${isDarkMode ? 'bg-gray-900' : 'bg-gray-50'} relative overflow-hidden`}>
+      {/* Gradient background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-indigo-100 to-transparent opacity-10 pointer-events-none"></div>
+      <div className="absolute -top-20 -right-20 w-72 h-72 rounded-full bg-indigo-500 opacity-10 blur-3xl"></div>
+      <div className="absolute bottom-0 left-0 w-72 h-72 rounded-full bg-purple-500 opacity-10 blur-3xl"></div>
       
       {/* Main container */}
-      <div className="max-w-md mx-auto px-6 py-12 h-screen flex flex-col">
+      <div className="max-w-md mx-auto px-6 py-12 h-full flex flex-col">
         {/* Logo */}
-        <div className="mt-8 mb-10">
-          <div className="bg-indigo-600 h-14 w-14 rounded-full flex items-center justify-center shadow-lg">
-            <div className="bg-indigo-500 h-7 w-7 rounded-full"></div>
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="mt-8 mb-10"
+        >
+          <div className="bg-gradient-to-r from-indigo-600 to-purple-600 h-14 w-14 rounded-xl flex items-center justify-center shadow-lg">
+            <div className="bg-white h-7 w-7 rounded-md opacity-90"></div>
           </div>
-        </div>
+        </motion.div>
 
         {/* Content */}
-        <div className="flex-1">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.1 }}
+          className="flex-1"
+        >
           <h1 className={`text-3xl font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
             Create Account
           </h1>
-          <p className={`text-sm mb-6 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-            Please enter valid information to access your account.
+          <p className={`text-sm mb-8 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+            Please enter your information to create your account
           </p>
           
           {/* Display API errors */}
           {signupApiError && !submitSuccess && (
-            <div className={`p-3 rounded-md mb-4 ${
-              isDarkMode ? 'bg-red-900/50 text-red-200' : 'bg-red-100 text-red-700'
-            }`}>
-              {signupApiError}
-            </div>
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className={`p-4 rounded-lg mb-6 flex items-center ${
+                isDarkMode ? 'bg-red-900/50 text-red-200' : 'bg-red-100 text-red-700'
+              }`}
+            >
+              <div className="mr-3">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div>{signupApiError}</div>
+            </motion.div>
           )}
 
           {/* Display success message */}
           {submitSuccess && (
-            <div className={`p-3 rounded-md mb-4 ${
-              isDarkMode ? 'bg-green-900/50 text-green-200' : 'bg-green-100 text-green-700'
-            }`}>
-              Account created successfully! Redirecting to login...
-            </div>
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className={`p-4 rounded-lg mb-6 flex items-center ${
+                isDarkMode ? 'bg-green-900/50 text-green-200' : 'bg-green-100 text-green-700'
+              }`}
+            >
+              <div className="mr-3">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div>Account created successfully! Redirecting to login...</div>
+            </motion.div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Phone input */}
-            <div className={`relative rounded-md ${isDarkMode ? 'bg-gray-800' : 'bg-gray-200'}`}>
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <span className={`text-gray-500`}>📱</span>
-              </div>
-              <input
-                type="tel"
-                name="phone"
-                value={formData.phone}
-                onChange={handleChange}
-                placeholder="Phone Number"
-                className={`w-full py-3 pl-10 pr-3 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                  isDarkMode ? 'bg-gray-800 text-white' : 'bg-gray-200 text-gray-800'
-                }`}
-              />
-              {validationErrors.phone && (
-                <p className={`text-xs mt-1 ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>
-                  {validationErrors.phone}
-                </p>
-              )}
-            </div>
-            
             {/* Full Name input */}
-            <div className={`relative rounded-md ${isDarkMode ? 'bg-gray-800' : 'bg-gray-200'}`}>
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <span className={`text-gray-500`}>👤</span>
+            <div className="relative">
+              <div className={`absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none ${
+                validationErrors.fullName && focused.fullName !== true ? 'text-red-500' : 'text-indigo-500'
+              }`}>
+                <FiUser size={20} />
               </div>
               <input
                 type="text"
                 name="fullName"
                 value={formData.fullName}
                 onChange={handleChange}
+                onFocus={() => handleFocus('fullName')}
+                onBlur={() => handleBlur('fullName')}
                 placeholder="Full Name"
-                className={`w-full py-3 pl-10 pr-3 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                  isDarkMode ? 'bg-gray-800 text-white' : 'bg-gray-200 text-gray-800'
-                }`}
+                className={getInputClassName('fullName')}
               />
-              {validationErrors.fullName && (
-                <p className={`text-xs mt-1 ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>
+              {validationErrors.fullName && focused.fullName !== true && (
+                <p className="text-xs mt-1.5 ml-1 text-red-500 font-medium">
                   {validationErrors.fullName}
                 </p>
               )}
             </div>
             
             {/* Email input */}
-            <div className={`relative rounded-md ${isDarkMode ? 'bg-gray-800' : 'bg-gray-200'}`}>
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <span className={`text-gray-500`}>📧</span>
+            <div className="relative">
+              <div className={`absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none ${
+                validationErrors.email && focused.email !== true ? 'text-red-500' : 'text-indigo-500'
+              }`}>
+                <FiMail size={20} />
               </div>
               <input
                 type="email"
                 name="email"
                 value={formData.email}
                 onChange={handleChange}
+                onFocus={() => handleFocus('email')}
+                onBlur={() => handleBlur('email')}
                 placeholder="Email"
-                className={`w-full py-3 pl-10 pr-3 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                  isDarkMode ? 'bg-gray-800 text-white' : 'bg-gray-200 text-gray-800'
-                }`}
+                className={getInputClassName('email')}
               />
-              {validationErrors.email && (
-                <p className={`text-xs mt-1 ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>
+              {validationErrors.email && focused.email !== true && (
+                <p className="text-xs mt-1.5 ml-1 text-red-500 font-medium">
                   {validationErrors.email}
                 </p>
               )}
             </div>
             
+            {/* Phone input */}
+            <div className="relative">
+              <div className={`absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none ${
+                validationErrors.phone && focused.phone !== true ? 'text-red-500' : 'text-indigo-500'
+              }`}>
+                <FiPhone size={20} />
+              </div>
+              <input
+                type="tel"
+                name="phone"
+                value={formData.phone}
+                onChange={handleChange}
+                onFocus={() => handleFocus('phone')}
+                onBlur={() => handleBlur('phone')}
+                placeholder="Phone Number (10 digits)"
+                className={getInputClassName('phone')}
+              />
+              {validationErrors.phone && focused.phone !== true && (
+                <p className="text-xs mt-1.5 ml-1 text-red-500 font-medium">
+                  {validationErrors.phone}
+                </p>
+              )}
+            </div>
+            
             {/* School Code input */}
-            <div className={`relative rounded-md ${isDarkMode ? 'bg-gray-800' : 'bg-gray-200'}`}>
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <span className={`text-gray-500`}>🏫</span>
+            <div className="relative">
+              <div className={`absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none ${
+                validationErrors.schoolCode && focused.schoolCode !== true ? 'text-red-500' : 'text-indigo-500'
+              }`}>
+                <FiBookmark size={20} />
               </div>
               <input
                 type="text"
                 name="schoolCode"
                 value={formData.schoolCode}
                 onChange={handleChange}
+                onFocus={() => handleFocus('schoolCode')}
+                onBlur={() => handleBlur('schoolCode')}
                 placeholder="School/College Code"
-                className={`w-full py-3 pl-10 pr-3 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                  isDarkMode ? 'bg-gray-800 text-white' : 'bg-gray-200 text-gray-800'
-                }`}
+                className={getInputClassName('schoolCode')}
               />
-              {validationErrors.schoolCode && (
-                <p className={`text-xs mt-1 ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>
+              {validationErrors.schoolCode && focused.schoolCode !== true && (
+                <p className="text-xs mt-1.5 ml-1 text-red-500 font-medium">
                   {validationErrors.schoolCode}
                 </p>
               )}
             </div>
             
             {/* Password input */}
-            <div className={`relative rounded-md ${isDarkMode ? 'bg-gray-800' : 'bg-gray-200'}`}>
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <span className={`text-gray-500`}>🔒</span>
+            <div className="relative">
+              <div className={`absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none ${
+                validationErrors.password && focused.password !== true ? 'text-red-500' : 'text-indigo-500'
+              }`}>
+                <FiLock size={20} />
               </div>
               <input
                 type={showPassword ? "text" : "password"}
                 name="password"
                 value={formData.password}
                 onChange={handleChange}
+                onFocus={() => handleFocus('password')}
+                onBlur={() => handleBlur('password')}
                 placeholder="Password"
-                className={`w-full py-3 pl-10 pr-10 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                  isDarkMode ? 'bg-gray-800 text-white' : 'bg-gray-200 text-gray-800'
-                }`}
+                className={getInputClassName('password')}
               />
               <div 
-                className="absolute inset-y-0 right-0 pr-3 flex items-center cursor-pointer"
-              onClick={() => setShowPassword(!showPassword)}
+                className={`absolute inset-y-0 right-0 pr-3 flex items-center cursor-pointer ${
+                  validationErrors.password && focused.password !== true ? 'text-red-500' : 'text-gray-500'
+                }`}
+                onClick={() => setShowPassword(!showPassword)}
               >
-                {showPassword ? 
-                  <FiEyeOff className="text-gray-500" /> : 
-                  <FiEye className="text-gray-500" />
-                }
+                {showPassword ? <FiEyeOff size={20} /> : <FiEye size={20} />}
               </div>
-              {validationErrors.password && (
-                <p className={`text-xs mt-1 ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>
+              {validationErrors.password && focused.password !== true && (
+                <p className="text-xs mt-1.5 ml-1 text-red-500 font-medium">
                   {validationErrors.password}
                 </p>
               )}
             </div>
             
             {/* Role selection */}
-            <div className={`flex rounded-md overflow-hidden ${isDarkMode ? 'bg-gray-800' : 'bg-gray-200'}`}>
-              <label 
-                className={`flex-1 py-3 px-4 text-center cursor-pointer transition ${
-                  formData.role === 'student' 
-                    ? 'bg-indigo-600 text-white' 
-                    : isDarkMode ? 'text-gray-300' : 'text-gray-700'
-                }`}
-              >
-                <input 
-                  type="radio" 
-                  name="role" 
-                  value="student" 
-                  checked={formData.role === 'student'} 
-                  onChange={handleChange} 
-                  className="sr-only"
-                />
-                Student
+            <div className="mt-2">
+              <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                Select Role
               </label>
-              <label 
-                className={`flex-1 py-3 px-4 text-center cursor-pointer transition ${
-                  formData.role === 'teacher' 
-                    ? 'bg-indigo-600 text-white' 
-                    : isDarkMode ? 'text-gray-300' : 'text-gray-700'
-                }`}
-              >
+              <div className={`flex rounded-lg overflow-hidden shadow-sm ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}>
+                <label 
+                  className={`flex-1 py-3.5 px-4 text-center cursor-pointer transition-all duration-200 ${
+                    formData.role === 'student' 
+                      ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white font-medium shadow-lg' 
+                      : isDarkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <input 
+                    type="radio" 
+                    name="role" 
+                    value="student" 
+                    checked={formData.role === 'student'} 
+                    onChange={handleChange} 
+                    className="sr-only"
+                  />
+                  Student
+                </label>
+                <label 
+                  className={`flex-1 py-3.5 px-4 text-center cursor-pointer transition-all duration-200 ${
+                    formData.role === 'teacher' 
+                      ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white font-medium shadow-lg' 
+                      : isDarkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
                   <input
                     type="radio"
                     name="role"
-                  value="teacher" 
-                  checked={formData.role === 'teacher'} 
+                    value="teacher" 
+                    checked={formData.role === 'teacher'} 
                     onChange={handleChange}
                     className="sr-only"
                   />
-                Teacher
+                  Teacher
                 </label>
-          </div>
+              </div>
+            </div>
 
             {/* Create button */}
-            <div className="relative mt-6">
-            <button
-              type="submit"
+            <motion.div 
+              className="relative mt-8"
+              whileHover={{ scale: 1.01 }}
+              whileTap={{ scale: 0.99 }}
+            >
+              <button
+                type="submit"
                 disabled={signupLoading}
-                className={`w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 px-6 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors ${
+                className={`w-full bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white py-3.5 px-6 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 shadow-md transition-all duration-200 ${
                   signupLoading ? 'opacity-70 cursor-not-allowed' : ''
                 }`}
               >
                 {signupLoading ? 'Creating Account...' : 'Create Account'}
-            </button>
-              <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-white">
-                <FiArrowRight size={20} />
-              </div>
-          </div>
-        </form>
+                <FiArrowRight size={20} className="absolute right-5 top-1/2 transform -translate-y-1/2 text-white" />
+              </button>
+            </motion.div>
+          </form>
 
           {/* Login link */}
           <div className="mt-8 text-center">
             <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
               Already have an account?
             </p>
-            <Link to="/login" className={`font-medium pointer-cursor ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-              Login
-          </Link>
+            <Link to="/login" className={`mt-1 inline-block font-medium text-indigo-600 hover:text-indigo-500 transition-colors duration-200`}>
+              Login to your account
+            </Link>
           </div>
-        </div>
-        
-        {/* Bottom pattern */}
-        <div className="absolute bottom-0 right-0 w-full h-24 opacity-10">
-          <div className="h-full w-full bg-gradient-to-tr from-indigo-800 to-transparent"></div>
-        </div>
+        </motion.div>
       </div>
     </div>
   );

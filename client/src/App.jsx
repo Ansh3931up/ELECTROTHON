@@ -1,38 +1,35 @@
 import "./App.css";
 
 import PropTypes from 'prop-types';
+import { useSelector } from "react-redux";
 import { Navigate, Outlet, Route, Routes } from "react-router-dom";
 
 import BackgroundAnimation from './components/BackgroundAnimation';
+import MainLayout from "./components/MainLayout";
 // Page Imports
 import ClassDetails from './pages/ClassDetails';
 import EditClass from './pages/EditClass';
 import FaceRegistration from './pages/FaceRegistration';
-import Login from './pages/Login';
-import Signup from './pages/Signup';
+import Login from './pages/login';
+import Signup from './pages/signUp';
 import SignupCheck from './pages/SignupCheck';
 import SplashScreen from './pages/SplashScreen';
 import Student from './pages/student';
 import Teacher from './pages/Teacher';
 import TeacherTimetable from './pages/TeacherTimetable';
 
-
-
 const FaceCheckRoute = () => {
-  // Get user from localStorage
-  const userStr = localStorage.getItem('user');
-  const user = userStr ? JSON.parse(userStr).user : null;
-  const isAuthenticated = !!localStorage.getItem('token');
-  const userRole = localStorage.getItem('userRole');
-  console.log("number one user",user);
+  // Use Redux state instead of localStorage directly
+  const { user, isAuthenticated } = useSelector(state => state.auth);
+  const userRole = user?.user?.role || localStorage.getItem('userRole');
   
   // If user is not authenticated, redirect to login
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
   
-  // If user exists and face verification is not verified, redirect to face registration
-  if (user && (!user.faceData || user.faceData.verificationStatus !== 'verified')) {
+  // If user exists and face is not registered, redirect to face registration
+  if (user?.user && user.user.isFaceRegistered === false) {
     return <Navigate to="/face-registration" replace />;
   }
   
@@ -47,24 +44,18 @@ const FaceCheckRoute = () => {
   return <Navigate to="/login" replace />;
 };
 
-  
-  
 // Protected route component
 const ProtectedRoute = () => {
-  // Check if user is authenticated by looking for token
-  const isAuthenticated = !!localStorage.getItem('token');
-  
-  // Get user from localStorage
-  const userStr = localStorage.getItem('user');
-  const user = userStr ? JSON.parse(userStr).user : null;
+  // Use Redux state for authentication checks
+  const { user, isAuthenticated } = useSelector(state => state.auth);
   
   // If not authenticated, redirect to login
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
   
-  // If user exists and face verification is not verified, redirect to face registration
-  if (user && (!user.faceData || user.faceData.verificationStatus !== 'verified')) {
+  // If user exists and face is not registered, redirect to face registration
+  if (user?.user && user.user.isFaceRegistered === false) {
     return <Navigate to="/face-registration" replace />;
   }
   
@@ -74,8 +65,8 @@ const ProtectedRoute = () => {
 
 // Guest-only route component (for login, signup, splash pages)
 const GuestOnlyRoute = () => {
-  // Check if user is already authenticated
-  const isAuthenticated = !!localStorage.getItem('token');
+  // Use Redux state for authentication checks
+  const { isAuthenticated } = useSelector(state => state.auth);
   const userRole = localStorage.getItem('userRole');
   
   // If authenticated, redirect to appropriate dashboard based on role
@@ -93,8 +84,9 @@ const GuestOnlyRoute = () => {
 
 // Role-based route component
 const RoleRoute = ({ allowedRoles }) => {
-  // Get user role from localStorage
-  const userRole = localStorage.getItem('userRole');
+  // Use Redux state and localStorage as fallback
+  const { user } = useSelector(state => state.auth);
+  const userRole = user?.user?.role || localStorage.getItem('userRole');
   
   // If user has an allowed role, render outlet (child routes)
   // Otherwise, redirect to appropriate dashboard or login
@@ -141,19 +133,21 @@ function App() {
           {/* Face verification check route */}
           <Route path="/verify-face" element={<FaceCheckRoute />} />
           
-          {/* Protected Routes */}
+          {/* Protected Routes - Wrapped with MainLayout for conditional navigation */}
           <Route element={<ProtectedRoute />}>
-            {/* Teacher Routes */}
-            <Route element={<RoleRoute allowedRoles={["teacher"]} />}>
-              <Route path="/teacher" element={<Teacher />} />
-              <Route path="/teacher-timetable" element={<TeacherTimetable />} />
-              <Route path="/class/:id" element={<ClassDetails />} />
-              <Route path="/edit-class/:id" element={<EditClass />} />
-            </Route>
-            
-            {/* Student Routes */}
-            <Route element={<RoleRoute allowedRoles={["student"]} />}>
-              <Route path="/student" element={<Student />} />
+            <Route element={<MainLayout />}>
+              {/* Teacher Routes */}
+              <Route element={<RoleRoute allowedRoles={["teacher"]} />}>
+                <Route path="/teacher" element={<Teacher />} />
+                <Route path="/teacher-timetable" element={<TeacherTimetable />} />
+                <Route path="/class/:id" element={<ClassDetails />} />
+                <Route path="/edit-class/:id" element={<EditClass />} />
+              </Route>
+              
+              {/* Student Routes */}
+              <Route element={<RoleRoute allowedRoles={["student"]} />}>
+                <Route path="/student" element={<Student />} />
+              </Route>
             </Route>
           </Route>
           

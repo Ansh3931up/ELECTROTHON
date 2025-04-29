@@ -66,7 +66,7 @@ export const registerClass = async (req, res, next) =>
     if (studentIds && studentIds.length > 0) {
       await User.updateMany(
         { _id: { $in: studentIds } },
-        { $set: { classId: newClass._id } }
+        { $push: { classId: newClass._id } }
       );
     }
 

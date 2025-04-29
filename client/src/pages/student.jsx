@@ -4,6 +4,7 @@ import { FiAlertTriangle, FiMessageSquare, FiSearch, FiWifiOff, FiXCircle } from
 import { useDispatch, useSelector } from "react-redux";
 
 import BottomNavBar from '../components/BottomNavBar';
+import FaceVerificationModal from '../components/FaceVerificationModal';
 import { useTheme } from '../context/ThemeContext';
 import detectSound from "../helpers/detectSound";
 import { getfrequencyByClassId, getStudentClasses, markStudentPresentByFrequency } from "../redux/slices/classSlice";
@@ -135,6 +136,8 @@ const Student = () => {
   // State for real-time notifications
   const [notifications, setNotifications] = useState([]);
   const [socketConnected, setSocketConnected] = useState(false);
+  const [showFaceVerification, setShowFaceVerification] = useState(false);
+  const [pendingAttendanceData, setPendingAttendanceData] = useState(null);
 
   useEffect(() => {
     if (user?.user?._id) {
@@ -323,7 +326,7 @@ const Student = () => {
     const classObj = classes.find(c => c._id === classId);
     if (!classObj) {
       setStatus("Class not found. Cannot start detection.");
-        return;
+      return;
     }
 
     // Use the active session type or fallback to provided or default
@@ -357,49 +360,30 @@ const Student = () => {
             // Play success sound
             playSuccessSound();
             
+            // Check if face is registered before proceeding
+            if (!user.user.isFaceRegistered) {
+              setStatus("❌ Please register your face in your profile before using attendance.");
+              setCanvasVisible(false);
+              return;
+            }
+            
             // Update UI
-            setStatus("✅ Frequency detected! Marking attendance...");
+            setStatus("✅ Frequency detected! Please verify your face...");
+            
+            // Store attendance data for after face verification
+            setPendingAttendanceData({
+              classId,
+              studentId: user.user._id,
+              detectedFrequency: detectedFreqValue || freqArray[0],
+              sessionType: activeSessionType,
+              className: classObj.className
+            });
+            
+            // Show face verification modal
+            setShowFaceVerification(true);
             
             // Keep canvas visible for a moment to see final detection
             setTimeout(() => setCanvasVisible(false), 3000);
-            console.log("marking attendance", classId, user.user._id, user.user.fullName || user.user.email, 'present', activeSessionType);
-            // Emit socket event for real-time update with the correct session type
-            const marked = markAttendance(
-              classId, 
-              user.user._id, 
-              user.user.fullName || user.user.email,
-              'present',
-              activeSessionType
-            );
-            
-            if (!marked) {
-              setStatus("Real-time update failed. Trying API...");
-            }
-            
-            // Also save via API
-            try {
-              const result = await dispatch(markStudentPresentByFrequency({
-                classId: classId,
-                studentId: user.user._id,
-                detectedFrequency: detectedFreqValue || freqArray[0],
-                sessionType: activeSessionType
-              })).unwrap();
-              
-              // Update UI with final status
-              setStatus(`✅ Attendance marked successfully for ${activeSessionType}!`);
-              console.log("Attendance marking success:", result);
-              
-              // Send system notification
-              if ('Notification' in window && Notification.permission === 'granted') {
-                new Notification('Attendance Confirmed ✓', {
-                  body: `You've been marked present for ${classObj?.className || 'class'}`,
-                  icon: '/favicon.ico'
-                });
-              }
-            } catch (err) {
-              setStatus(`⚠️ Failed to mark attendance: ${err || 'Unknown error'}`);
-              console.error("Attendance marking error:", err);
-            }
           } else {
             setStatus("Frequency detection failed. Will retry automatically.");
             setCanvasVisible(false);
@@ -430,6 +414,56 @@ const Student = () => {
           startDetection(classId, classFrequencies[classId], activeSessionType);
         }
       }, 5000);
+    }
+  };
+
+  const handleFaceVerification = async (isVerified) => {
+    if (!isVerified || !pendingAttendanceData) {
+      setStatus("Face verification failed. Please try again.");
+      return;
+    }
+
+    try {
+      setStatus("✅ Face verified! Marking attendance...");
+      
+      // Emit socket event for real-time update
+      const marked = markAttendance(
+        pendingAttendanceData.classId,
+        pendingAttendanceData.studentId,
+        user.user.fullName || user.user.email,
+        'present',
+        pendingAttendanceData.sessionType
+      );
+      
+      if (!marked) {
+        setStatus("Real-time update failed. Trying API...");
+      }
+      
+      // Save via API
+      const result = await dispatch(markStudentPresentByFrequency({
+        classId: pendingAttendanceData.classId,
+        studentId: pendingAttendanceData.studentId,
+        detectedFrequency: pendingAttendanceData.detectedFrequency,
+        sessionType: pendingAttendanceData.sessionType
+      })).unwrap();
+      
+      // Update UI with final status
+      setStatus(`✅ Attendance marked successfully for ${pendingAttendanceData.sessionType}!`);
+      console.log("Attendance marking success:", result);
+      
+      // Send system notification
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification('Attendance Confirmed ✓', {
+          body: `You've been marked present for ${pendingAttendanceData.className}`,
+          icon: '/favicon.ico'
+        });
+      }
+    } catch (err) {
+      setStatus(`⚠️ Failed to mark attendance: ${err || 'Unknown error'}`);
+      console.error("Attendance marking error:", err);
+    } finally {
+      setShowFaceVerification(false);
+      setPendingAttendanceData(null);
     }
   };
 
@@ -761,6 +795,18 @@ const Student = () => {
         )}
       </div>
       <BottomNavBar user={user} />
+      
+      {/* Add Face Verification Modal */}
+      <FaceVerificationModal
+        isOpen={showFaceVerification}
+        onClose={() => {
+          setShowFaceVerification(false);
+          setPendingAttendanceData(null);
+          setStatus("Face verification cancelled. Will retry frequency detection...");
+        }}
+        onVerify={handleFaceVerification}
+        userId={user?.user?._id}
+      />
     </div>
   );
 };

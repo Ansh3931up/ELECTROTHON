@@ -16,8 +16,6 @@ import {
   getAttendanceByDateAndType,
   getOngoingAttendance
 } from "../controllers/class.controllers.js";
-import upload from "../middlewares/multer.middleware.js";
-// import { checkRole } from '../middleware/role.middleware.js';
 
 const router = Router();
 router.post("/create-class",verifyJWT, registerClass);

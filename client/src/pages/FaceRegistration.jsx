@@ -7,8 +7,7 @@ import { toast } from 'react-toastify';
 import Webcam from 'react-webcam';
 
 import { useTheme } from '../context/ThemeContext';
-import { getUserProfile, registerFace } from '../redux/slices/authSlice';
-import { uploadFileToCloudinary } from '../utils/cloudinaryHelper';
+import { getUserProfile } from '../redux/slices/authSlice';
 import { checkCameraPermission, requestCameraPermission } from '../utils/permissions';
 
 // Helper function to extract the actual user data from potentially nested user objects
@@ -131,96 +130,31 @@ const FaceRegistration = () => {
     }
   };
 
-  // Function to convert base64 to file object
-  const base64ToFile = (base64, filename) => {
-    const arr = base64.split(',');
-    const mime = arr[0].match(/:(.*?);/)[1];
-    const bstr = atob(arr[1]);
-    let n = bstr.length;
-    const u8arr = new Uint8Array(n);
-    
-    while (n--) {
-      u8arr[n] = bstr.charCodeAt(n);
-    }
-    
-    return new File([u8arr], filename, { type: mime });
-  };
-
-  // Function to upload images directly using the method provided by the user
-  const uploadImagesDirect = async (images) => {
-    try {
-      const uploadedUrls = [];
-      
-      console.log(`Starting direct upload of ${images.length} images`);
-      
-      for (let i = 0; i < images.length; i++) {
-        // Skip invalid images
-        if (!images[i] || images[i].length < 100) {
-          console.warn(`Image ${i+1} is invalid or too small, skipping`);
-          continue;
-        }
-        
-        // Convert base64 to file
-        const filename = `face_${i+1}.jpg`;
-        const file = base64ToFile(images[i], filename);
-        
-        console.log(`Preparing to upload image ${i+1}/${images.length}:`, {
-          filename,
-          type: file.type,
-          size: file.size
-        });
-        
-        // Upload using direct method
-        const url = await uploadFileToCloudinary(file);
-        
-        if (url) {
-          uploadedUrls.push({ url });
-          console.log(`Image ${i+1} uploaded successfully: ${url}`);
-        }
-      }
-      
-      console.log(`Upload complete: ${uploadedUrls.length}/${images.length} images successful`);
-      
-      return {
-        results: uploadedUrls,
-        hasErrors: uploadedUrls.length === 0,
-        count: uploadedUrls.length,
-        totalAttempted: images.length
-      };
-    } catch (error) {
-      console.error('Error in uploadImagesDirect:', error);
-      return {
-        results: [],
-        hasErrors: true,
-        count: 0,
-        totalAttempted: images.length
-      };
-    }
-  };
-
   // Function to fetch the latest user data
   const refreshUserData = async () => {
     try {
       const userId = getUserId(users);
+      console.log('Refreshing user data for ID:', userId);
+      
       if (!userId) {
         console.error("Cannot refresh user data: User ID not found");
         return;
       }
       
-      console.log("Refreshing user data for ID:", userId);
-      
       // Call your API to get the latest user data
       const refreshedUserData = await dispatch(getUserProfile({ userId })).unwrap();
+      console.log("Refreshed user data:", refreshedUserData);
       
       // Update local storage with fresh data
       if (refreshedUserData) {
         // Store the updated user data
         localStorage.setItem('user', JSON.stringify(refreshedUserData));
-        console.log("User data refreshed:", refreshedUserData);
+        console.log("User data updated in localStorage");
         
         // Check updated verification status
         if (refreshedUserData.faceData && 
             refreshedUserData.faceData.verificationStatus === 'verified') {
+          console.log("Face verification is now complete");
           toast.success("Your face verification is now complete!");
         }
       }
@@ -230,8 +164,13 @@ const FaceRegistration = () => {
   };
 
   const handleSubmit = async () => {
-    if (numImagesCollected < 15) {
-      setErrorMessage('Please collect all 15 images before submitting.');
+    console.log('Starting face registration process...');
+    console.log('Number of images collected:', numImagesCollected);
+    console.log('Collected images:', collectedImages);
+
+    if (numImagesCollected < 3) {
+      console.log('Not enough images collected. Need 3, have:', numImagesCollected);
+      setErrorMessage('Please collect all 3 images before submitting.');
       return;
     }
 
@@ -239,55 +178,57 @@ const FaceRegistration = () => {
     setErrorMessage('');
 
     try {
-      // First upload images to Cloudinary
-      toast.info('Uploading face images to cloud storage...');
-      
-      // Use the direct upload method instead of the previous one that had issues
-      const uploadResult = await uploadImagesDirect(collectedImages);
-      
-      if (uploadResult.hasErrors) {
-        toast.warning(`Some images failed to upload (${uploadResult.count}/${uploadResult.totalAttempted} successful)`);
-      }
-      
-      if (uploadResult.count === 0) {
-        throw new Error('Failed to upload any face images to cloud storage');
-      }
-      
       // Get user ID regardless of nesting level
       const userId = getUserId(users);
-      console.log("Using user ID:", userId);
+      console.log("User ID extracted:", userId);
       
       if (!userId) {
+        console.error('No user ID found');
         throw new Error('Could not determine user ID. Please try logging out and back in.');
       }
       
-      // Prepare the payload for the backend with the extracted userId
+      // Prepare the payload for the backend
       const payload = { 
-        faceData: uploadResult.results.map(img => img.url),
-        userId: userId,
+        user_id: userId,
+        face_images: collectedImages.slice(0, 3) // Take first 3 images
       };
       
       // Log the payload being sent to the backend
       console.log('Sending registration payload to backend:', {
         ...payload,
-        faceData: payload.faceData,
-        userId: payload.userId
+        face_images_count: payload.face_images.length
       });
       
-      // Then register the face using the cloud URLs
-      const response = await dispatch(registerFace(payload)).unwrap();
-      console.log("response", response);
+      console.log('Making POST request to face recognition endpoint...');
+      // Send request to face recognition endpoint
+      const response = await fetch('https://facerecognitionsystem-993g.onrender.com/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
+      });
+
+      console.log('Response status:', response.status);
+      const result = await response.json();
+      console.log("Face registration response:", result);
       
-      if(response.success){
+      if(response.ok){
+        console.log('Face registration successful');
         setSavedToDatabase(true);
         toast.success('Face registration successful!');
         
         // Refresh user data to get the latest verification status
+        console.log('Refreshing user data...');
         await refreshUserData();
         
         setTimeout(() => {
+          console.log('Redirecting to home page...');
           navigate('/');
         }, 1500);
+      } else {
+        console.error('Face registration failed:', result);
+        throw new Error(result.message || 'Failed to register face');
       }
     } catch (error) {
       console.error('Registration error:', error);
@@ -336,7 +277,7 @@ const FaceRegistration = () => {
   }, [isAutoCapturing]);
 
   // Calculate progress percentage
-  const progressPercentage = (numImagesCollected / 15) * 100;
+  const progressPercentage = (numImagesCollected / 3) * 100;
 
   // Clean up interval on unmount
   useEffect(() => {
@@ -359,7 +300,7 @@ const FaceRegistration = () => {
       toast.info("Auto-capture stopped");
     } else {
       // Start auto-capture
-      if (numImagesCollected >= 15) {
+      if (numImagesCollected >= 3) {
         toast.warning("Maximum number of images already collected");
         return;
       }
@@ -369,7 +310,7 @@ const FaceRegistration = () => {
       toast.info("Auto-capture started - photos will be taken automatically");
 
       let captureCount = 0;
-      const totalNeeded = 15 - numImagesCollected;
+      const totalNeeded = 3 - numImagesCollected;
       
       autoIntervalRef.current = setInterval(() => {
         if (webcamRef.current) {
@@ -385,13 +326,13 @@ const FaceRegistration = () => {
             captureCount++;
             setAutoCapturingProgress(Math.min(100, (captureCount / totalNeeded) * 100));
             
-            // Only show toast for every 5th image to reduce notification spam
-            if (captureCount % 5 === 0 || captureCount === totalNeeded) {
-              toast.success(`Auto-capture: ${numImagesCollected + 1}/15 photos`);
+            // Only show toast for every image to reduce notification spam
+            if (captureCount % 1 === 0 || captureCount === totalNeeded) {
+              toast.success(`Auto-capture: ${numImagesCollected + 1}/3 photos`);
             }
             
             // Stop if we've collected enough images
-            if (numImagesCollected + 1 >= 15 || captureCount >= totalNeeded) {
+            if (numImagesCollected + 1 >= 3 || captureCount >= totalNeeded) {
               clearInterval(autoIntervalRef.current);
               autoIntervalRef.current = null;
               setIsAutoCapturing(false);
@@ -427,7 +368,7 @@ const FaceRegistration = () => {
             Face Registration
           </h2>
           <p className={`mt-2 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-            {numImagesCollected}/15 photos captured
+            {numImagesCollected}/3 photos captured
           </p>
         </div>
         
@@ -554,7 +495,7 @@ const FaceRegistration = () => {
                       </svg>
                       {/* Text in the center of circle */}
                       <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="text-white font-bold text-xl drop-shadow-lg">{numImagesCollected}/15</span>
+                        <span className="text-white font-bold text-xl drop-shadow-lg">{numImagesCollected}/3</span>
                       </div>
                     </div>
                   </div>
@@ -605,7 +546,7 @@ const FaceRegistration = () => {
                 {/* Auto-capture button */}
                 <button
                   onClick={toggleAutoCapture}
-                  disabled={numImagesCollected >= 15 || isSubmitting}
+                  disabled={numImagesCollected >= 3 || isSubmitting}
                   className={`flex items-center justify-center px-6 py-3 ${
                     isDarkMode
                       ? isAutoCapturing ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
@@ -734,7 +675,7 @@ const FaceRegistration = () => {
                 <div className="w-full max-w-md mx-auto mt-6">
                   <button
                     onClick={handleSubmit}
-                    disabled={numImagesCollected < 15 || isSubmitting}
+                    disabled={numImagesCollected < 3 || isSubmitting}
                     className={`flex items-center justify-center px-6 py-4 ${
                       isDarkMode
                         ? 'bg-green-600 hover:bg-green-700 disabled:bg-gray-700'
@@ -744,9 +685,9 @@ const FaceRegistration = () => {
                     <FiSave className="mr-2 text-lg" />
                     {isSubmitting ? 'Saving...' : hasFaceData ? 'Update Face Data' : 'Save Face Data'}
                   </button>
-                  {numImagesCollected < 15 && (
+                  {numImagesCollected < 3 && (
                     <p className={`text-center text-xs mt-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                      Need {15 - numImagesCollected} more photos before saving
+                      Need {3 - numImagesCollected} more photos before saving
                     </p>
                   )}
                 </div>

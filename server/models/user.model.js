@@ -46,22 +46,22 @@ const userSchema = new Schema(
       enum: ["teacher", "student"], // Allowed values
       required: true,
     },
-    classId: {
+    classId: [{
       type: Schema.Types.ObjectId,
       ref: "Class",
-      default: null,
-    },
-    faceData:{
-      faceImages: [{
-          url: String,
-      }],
-      lastUpdated: {type:Date, default:Date.now},
-      verificationStatus:{
-          type: String,
-          enum: ['pending', 'verified', 'rejected'],
-          default: 'pending'
+      default: [],
+    }],
+    embeddings:[
+      {
+        type: Array,
+        default: [],
       }
-  }
+    ],
+    isFaceRegistered:{
+      type: Boolean,
+      default: false,
+    },
+    
   },
   {
     timestamps: true,

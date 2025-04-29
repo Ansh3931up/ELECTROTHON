@@ -109,19 +109,7 @@ const Teacher = () => {
     }
   };
 
-  // --- Helper to get badge styles based on status ---
-  const getStatusBadgeStyles = (status) => {
-    switch (status) {
-      case 'active':
-        return 'bg-green-100 text-green-800 border-green-200';
-      case 'inactive':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'archived':
-        return 'bg-red-100 text-red-800 border-red-200';
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-200'; // Fallback
-    }
-  };
+
 
   // --- Define Lighter/Subtler Palettes ---
   const palettes = [
@@ -139,7 +127,7 @@ const Teacher = () => {
   const filterOptions = ['active', 'inactive', 'ended', 'all'];
 
   return (
-    <div className={`pb-20 pt-4 min-h-screen bg-transparent transition-colors duration-300`}>
+    <div className={`pb-20 h-fit bg-transparent transition-colors duration-300`}>
       <div className="p-4 max-w-4xl mx-auto">
         {/* <div className="flex justify-end items-center mb-6 bg-white/80 backdrop-blur-sm p-4 rounded-xl shadow-sm">
           <OfflineToggle onModeChange={handleOfflineModeChange} />
