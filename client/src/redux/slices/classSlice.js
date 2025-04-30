@@ -378,6 +378,19 @@ export const fetchStudentTotalAttendance = createAsyncThunk(
   }
 );
 
+export const joinClass = createAsyncThunk(
+  'class/joinClass',
+  async ({ classId, studentId }, { rejectWithValue }) => {
+    try {
+      const response = await axios.post(`/api/classes/${classId}/join`, { studentId });
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to join class');
+    }
+  }
+);
+
+
 const classSlice = createSlice({
   name: "class",
   initialState: {
@@ -402,6 +415,7 @@ const classSlice = createSlice({
     totalAttendance: null,
     fetchingTotalAttendance: false,
     totalAttendanceError: null,
+    teachers: [], // Add teachers array to store teachers and their classes
   },
   reducers: {
     setSelectedClass: (state, action) => {
@@ -601,7 +615,24 @@ const classSlice = createSlice({
       .addCase(fetchStudentTotalAttendance.rejected, (state, action) => {
         state.fetchingTotalAttendance = false;
         state.totalAttendanceError = action.payload;
-      });
+      })
+      .addCase(joinClass.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(joinClass.fulfilled, (state, action) => {
+        state.loading = false;
+        // Update the class in the state if it exists
+        const index = state.classes.findIndex(c => c._id === action.payload._id);
+        if (index !== -1) {
+          state.classes[index] = action.payload;
+        }
+      })
+      .addCase(joinClass.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      
   },
 });
 

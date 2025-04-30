@@ -1208,3 +1208,116 @@ export const getStudentTotalAttendance = asyncHandler(async (req, res) => {
     });
   }
 });
+
+export const joinClass = async (req, res, next) => {
+  try {
+    const { classId } = req.params;
+    const { studentId } = req.body;
+    const userId = req.user?.id;
+
+    // Validate inputs
+    if (!mongoose.Types.ObjectId.isValid(classId) || !mongoose.Types.ObjectId.isValid(studentId)) {
+      return next(new AppError("Invalid Class ID or Student ID", 400));
+    }
+
+    // Verify the requesting user is the student trying to join
+    if (userId !== studentId) {
+      return next(new AppError("You can only join classes for yourself", 403));
+    }
+
+    // Find the class
+    const classDoc = await Class.findById(classId);
+    if (!classDoc) {
+      return next(new AppError("Class not found", 404));
+    }
+
+    // Check if student is already in the class
+    if (classDoc.studentList.includes(studentId)) {
+      return next(new AppError("You are already enrolled in this class", 400));
+    }
+
+    // Add student to the class
+    classDoc.studentList.push(studentId);
+    await classDoc.save();
+
+    // Update student's class list
+    await User.findByIdAndUpdate(
+      studentId,
+      { $push: { classId: classId } },
+      { new: true }
+    );
+
+    // Populate the updated class with teacher details
+    const populatedClass = await Class.findById(classId)
+      .populate('teacherId', 'fullName email')
+      .populate('studentList', 'fullName email');
+
+    res.status(200).json({
+      success: true,
+      message: "Successfully joined the class",
+      class: populatedClass
+    });
+
+  } catch (error) {
+    console.error("Error joining class:", error);
+    next(new AppError(error.message || "Failed to join class", 500));
+  }
+};
+
+/**
+ * @desc    Get all teachers with their classes for a specific school code
+ * @route   GET /api/users/teachers/school/:schoolCode
+ * @access  Private
+ */
+export const getTeachersBySchoolCode = asyncHandler(async (req, res) => {
+  try {
+    const { schoolCode } = req.params;
+    console.log("schoolCode",schoolCode);
+    
+    // Validate school code
+    if (!schoolCode) {
+      return next(new AppError("School code is required", 400));
+    }
+
+    // Find all active teachers with the same school code
+    const teachers = await User.find({ 
+      role: 'teacher',
+      schoolCode: schoolCode,
+    }).select('fullName email _id');
+    console.log("teachers",teachers);
+
+    if (!teachers || teachers.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: "No teachers found for this school code",
+        data: []
+      });
+    }
+
+    // For each teacher, populate their active classes
+    const teachersWithClasses = await Promise.all(
+      teachers.map(async (teacher) => {
+        const classes = await Class.find({ 
+          teacherId: teacher._id,
+          status: 'active'
+        }).select('className classCode batch schedule');
+        console.log("classes",classes);
+        return {
+          teacherId: teacher._id,
+          fullName: teacher.fullName,
+          email: teacher.email,
+          classes
+        };
+      })
+    );
+
+    res.status(200).json({
+      success: true,
+      count: teachersWithClasses.length,
+      data: teachersWithClasses
+    });
+  } catch (error) {
+    console.error('Error fetching teachers:', error);
+    return next(new AppError(error.message || "Failed to fetch teachers", 500));
+  }
+});

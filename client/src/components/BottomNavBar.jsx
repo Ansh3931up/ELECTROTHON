@@ -5,7 +5,7 @@ FiBook, FiCalendar,
 FiHome, FiMenu, FiPlus,FiPlusCircle, 
 FiUser, FiX} from 'react-icons/fi';
 import { useDispatch, useSelector } from 'react-redux';
-import {  NavLink,useLocation } from 'react-router-dom';
+import {  NavLink,useLocation, useNavigate } from 'react-router-dom';
 
 import { useTheme } from '../context/ThemeContext'; // Import useTheme
 import { fetchAllStudents } from '../redux/slices/authSlice';
@@ -16,6 +16,7 @@ const daysOfWeek = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Sat
 
 const BottomNavBar = ({ user }) => {
   const location = useLocation();
+  const navigate = useNavigate();
   const dispatch = useDispatch();
   const students = useSelector((state) => state.auth.students);
   const { isDarkMode } = useTheme(); // Use context for dark mode state
@@ -163,19 +164,28 @@ const BottomNavBar = ({ user }) => {
     { label: 'Classes', path: '/teacher', icon: <FiBook size={20} /> },
     { 
       label: 'Add', 
-      icon: <FiPlusCircle size={24} />,
+      icon: <FiPlusCircle size={28} />,
       action: () => {
         setShowCreateForm(true);
         setFormError(''); // Clear errors when opening modal
-      }
+      },
+      isAddButton: true
     },
     { label: 'Timetable', path: '/teacher-timetable', icon: <FiCalendar size={20} /> },
     { label: 'Attendance', path: '/teacher', icon: <FiMenu size={20} />},
   ];
   
   const studentNavItems = [
-    { label: 'Home', path: '/student', icon: <FiHome size={20} /> },
-    { label: 'Classes', path: '/student', icon: <FiBook size={20} /> },
+    { label: 'Home', path: '/student-home', icon: <FiHome size={20} /> },
+    { label: 'Classes', path: '/student-classes', icon: <FiBook size={20} /> },
+    { 
+      label: 'Add', 
+      icon: <FiPlusCircle size={28} />,
+      action: () => {
+        navigate('/student-find-classes');
+      },
+      isAddButton: true
+    },
     { label: 'Attendance', path: '/student-attendance', icon: <FiCalendar size={20} /> },
     { label: 'Profile', path: '/student', icon: <FiUser size={20} /> },
   ];
@@ -202,14 +212,13 @@ const BottomNavBar = ({ user }) => {
       <div className={`fixed rounded-t-3xl bg-gradient-to-r shadow-lg z-40 border-t -bottom-2 left-0 right-0 ${
           isDarkMode
           ? 'from-gray-800 to-gray-900 border-gray-700'
-          : 'from-[#003065] to-[#002040] border-blue-800' // Original light colors
+          : 'from-[#003065] to-[#002040] border-blue-800'
       }`}>
         <div className="flex justify-between items-center max-w-screen-sm mx-auto">
           {bottomNavItems.map((item, index) => {
             const isActive = location.pathname === item.path;
-            const isAddButton = isTeacher && item.label === 'Add';
+            const isAddButton = item.isAddButton;
             
-            // Apply dark mode conditional styles to icons/text if needed
             const activeClass = isDarkMode ? 'text-blue-300' : 'text-blue-400';
             const inactiveClass = isDarkMode ? 'text-gray-400 hover:text-gray-200' : 'text-white/70 hover:text-white';
             
@@ -218,11 +227,11 @@ const BottomNavBar = ({ user }) => {
                 {item.action ? (
                   <button
                     onClick={item.action}
-                    className={`${isAddButton ? 'w-16 h-16 rounded-full bg-blue-500 hover:bg-blue-400 shadow-lg text-white flex flex-col items-center justify-center' : 
+                    className={`${isAddButton ? 'w-16 h-16 rounded-full bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-400 hover:to-indigo-400 shadow-lg text-white flex items-center justify-center transform transition-all duration-300 hover:scale-110 active:scale-95 hover:shadow-xl' : 
                       `w-full py-5 flex flex-col items-center justify-center transition-colors 
-                      ${isActive ? activeClass : ''}`}`}
+                      ${isActive ? activeClass : inactiveClass}`}`}
                   >
-                    <div className={isAddButton ? '' : `${isActive ? activeClass : ''}`}>
+                    <div className={isAddButton ? 'drop-shadow-md' : `${isActive ? activeClass : inactiveClass}`}>
                       {item.icon}
                     </div>
                   </button>

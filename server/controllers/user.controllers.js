@@ -47,8 +47,9 @@ const login = async (req, res, next) => {
       return next(new AppError("All fields are required", 400));
     }
 
-    const user = await User.findOne({ email }).select("+password");
-
+    const user = await User.findOne({ email }).select("+password -embeddings");
+    console.log("user login",user);
+    
     if (!user) {
       return next(new AppError("Email or password does not match", 400));
     }
@@ -95,6 +96,7 @@ const getProfile = async (req, res, next) => {
     }
     
     const user = await User.findById(id);
+    console.log("user profile",user)
     
     if (!user) {
       return next(new AppError("User not found", 404));

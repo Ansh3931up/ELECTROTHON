@@ -89,6 +89,7 @@ export const getUserProfile = createAsyncThunk(
       const response = await axios.get(`${API_URL}/profile/${userId}`, {
         withCredentials: true,
       });
+      console.log("user profile",response.data);
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || "Failed to fetch user profile");
@@ -96,8 +97,31 @@ export const getUserProfile = createAsyncThunk(
   }
 );
 
+// Add this with other thunks at the top
+export const fetchTeachersBySchool = createAsyncThunk(
+  "auth/fetchTeachersBySchool",
+  async (schoolCode, { rejectWithValue }) => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await axios.get(
+        `${API_URL}/teachers/school/${schoolCode}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      // console.log("Teachers:", response);
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || "Failed to fetch teachers");
+    }
+  }
+);
+
 // Retrieve user from localStorage
 const storedUser = JSON.parse(localStorage.getItem('user')) || null;
+console.log("storedUser",storedUser);
 const storedToken = localStorage.getItem('token');
 
 // Auth Slice
@@ -108,6 +132,7 @@ const authSlice = createSlice({
     loading: false, 
     error: null, 
     students: [],
+    teachers: [],
     isAuthenticated: !!storedToken, // Use token to determine if authenticated
   },
   reducers: {
@@ -248,6 +273,18 @@ const authSlice = createSlice({
       .addCase(getUserProfile.rejected, (state, action) => {
         state.error = action.payload;
         state.loading = false;
+      })
+      .addCase(fetchTeachersBySchool.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchTeachersBySchool.fulfilled, (state, action) => {
+        state.loading = false;
+        state.teachers = action.payload.data;
+      })
+      .addCase(fetchTeachersBySchool.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
       });
   },
 });

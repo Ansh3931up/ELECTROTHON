@@ -15,7 +15,8 @@ import {
   endAttendanceSession,
   getAttendanceByDateAndType,
   getOngoingAttendance,
-  getStudentTotalAttendance
+  getStudentTotalAttendance,
+  joinClass
 } from "../controllers/class.controllers.js";
 
 const router = Router();
@@ -51,5 +52,8 @@ router.get('/:classId', getClassDetails); //in use
 
 // --- Class Routes ---
 router.patch('/:classId', verifyJWT, editClassDetails);
+
+// Add route for joining a class
+router.post('/:classId/join', verifyJWT, joinClass);
 
 export default router;

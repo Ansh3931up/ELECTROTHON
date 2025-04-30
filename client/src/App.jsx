@@ -10,12 +10,14 @@ import MainLayout from "./components/MainLayout";
 import ClassDetails from './pages/ClassDetails';
 import EditClass from './pages/EditClass';
 import FaceRegistration from './pages/FaceRegistration';
+import HomePage from "./pages/HomePage";
 import Login from './pages/login';
 import Signup from './pages/signUp';
 import SignupCheck from './pages/SignupCheck';
 import SplashScreen from './pages/SplashScreen';
 import Student from './pages/student';
 import StudentAttendance from "./pages/StudentAttendance";
+import StudentFindClasses from './pages/StudentFindClasses';
 import Teacher from './pages/Teacher';
 import TeacherTimetable from './pages/TeacherTimetable';
 
@@ -148,7 +150,10 @@ function App() {
               {/* Student Routes */}
               <Route element={<RoleRoute allowedRoles={["student"]} />}>
                 <Route path="/student" element={<Student />} />
+                {/* <Route path="/student-classes" element={<StudentClasses />} /> */}
+                <Route path="/student-home" element={<HomePage />} />
                 <Route path="/student-attendance" element={<StudentAttendance />} />
+                <Route path="/student-find-classes" element={<StudentFindClasses />} />
               </Route>
             </Route>
           </Route>
