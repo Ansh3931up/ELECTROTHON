@@ -160,7 +160,7 @@ const BottomNavBar = ({ user }) => {
   };
   
   const teacherNavItems = [
-    { label: 'Home', path: '/teacher', icon: <FiHome size={20} /> },
+    { label: 'Home', path: '/teacher-home', icon: <FiHome size={20} /> },
     { label: 'Classes', path: '/teacher', icon: <FiBook size={20} /> },
     { 
       label: 'Add', 

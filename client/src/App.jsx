@@ -19,6 +19,7 @@ import Student from './pages/student';
 import StudentAttendance from "./pages/StudentAttendance";
 import StudentFindClasses from './pages/StudentFindClasses';
 import Teacher from './pages/Teacher';
+import TeacherHome from "./pages/TeacherHome";
 import TeacherTimetable from './pages/TeacherTimetable';
 
 const FaceCheckRoute = () => {
@@ -143,6 +144,7 @@ function App() {
               <Route element={<RoleRoute allowedRoles={["teacher"]} />}>
                 <Route path="/teacher" element={<Teacher />} />
                 <Route path="/teacher-timetable" element={<TeacherTimetable />} />
+                <Route path="/teacher-home" element={<TeacherHome />} />
                 <Route path="/class/:id" element={<ClassDetails />} />
                 <Route path="/edit-class/:id" element={<EditClass />} />
               </Route>

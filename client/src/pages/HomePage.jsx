@@ -4,6 +4,9 @@ import { useEffect, useState } from 'react';
 import { FiBarChart2, FiBell, FiBook, FiCalendar, FiClock, FiMoon, FiSun, FiTrendingUp, FiUsers } from 'react-icons/fi';
 import { useDispatch, useSelector } from 'react-redux';
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import Slider from 'react-slick';
+import 'slick-carousel/slick/slick.css';
+import 'slick-carousel/slick/slick-theme.css';
 
 import BottomNavBar from '../components/BottomNavBar';
 import { useTheme } from '../context/ThemeContext';
@@ -202,6 +205,117 @@ AttendanceChart.propTypes = {
   })).isRequired
 };
 
+// Add AdvertisementCarousel component
+const AdvertisementCarousel = () => {
+  const settings = {
+    dots: true,
+    infinite: true,
+    speed: 500,
+    slidesToShow: 1,
+    slidesToScroll: 1,
+    autoplay: true,
+    autoplaySpeed: 4000,
+    arrows: false,
+    className: 'mb-4',
+    appendDots: dots => (
+      <div style={{ bottom: '8px' }}>
+        <ul>{dots}</ul>
+      </div>
+    )
+  };
+
+  const slides = [
+    {
+      title: "NeuraCampus",
+      description: "Transforming Campuses, Empowering Education 🎓",
+      subtext: "AI-driven solutions for smarter campus management",
+      bgColor: "from-[#7C3AED] to-[#5B21B6]",
+      icon: "🚀"
+    },
+    {
+      title: "Smart Features",
+      description: "Proxy-Free Attendance System",
+      subtext: "Secure, automated, and tamper-proof tracking",
+      bgColor: "from-[#10B981] to-[#059669]",
+      icon: "✅"
+    },
+    {
+      title: "AI-Powered",
+      description: "Resource Management",
+      subtext: "Optimized use of libraries, labs, and learning materials",
+      bgColor: "from-[#F59E0B] to-[#D97706]",
+      icon: "💡"
+    },
+    {
+      title: "Career Growth",
+      description: "Internship & Career Portal",
+      subtext: "Connecting students with top industry opportunities",
+      bgColor: "from-[#FF7D90] to-[#FF5D73]",
+      icon: "🎯"
+    },
+    {
+      title: "Community",
+      description: "Smart Networking & Collaboration",
+      subtext: "Dynamic space for events and collaborative learning",
+      bgColor: "from-[#3B82F6] to-[#2563EB]",
+      icon: "🤝"
+    }
+  ];
+
+  return (
+    <div className="mb-4">
+      <Slider {...settings}>
+        {slides.map((slide, index) => (
+          <div key={index} className="px-1">
+            <div className={`h-[140px] p-4 rounded-2xl bg-gradient-to-r ${slide.bgColor} text-white relative overflow-hidden`}>
+              {/* Background Icon */}
+              <div className="absolute top-0 right-0 w-24 h-24 -mr-6 -mt-6 opacity-10">
+                <span className="text-[100px]">{slide.icon}</span>
+              </div>
+              
+              {/* Content Container */}
+              <div className="relative z-10 h-full flex flex-col justify-between">
+                <div className="space-y-1.5">
+                  {/* Header */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl">{slide.icon}</span>
+                    <h2 className="text-base font-bold leading-tight">{slide.title}</h2>
+                  </div>
+                  
+                  {/* Description & Subtext */}
+                  <div className="space-y-0.5">
+                    <p className="text-sm font-semibold text-white/90 line-clamp-1">
+                      {slide.description}
+                    </p>
+                    <p className="text-xs text-white/80 line-clamp-1">
+                      {slide.subtext}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Tags - Only on first slide */}
+                {index === 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-auto">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/20 text-white whitespace-nowrap">
+                      #AIinEducation
+                    </span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/20 text-white whitespace-nowrap">
+                      #SmartCampus
+                    </span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/20 text-white whitespace-nowrap">
+                      #DigitalTransformation
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </Slider>
+    </div>
+  );
+};
+
 const HomePage = () => {
   const dispatch = useDispatch();
   const { isDarkMode, toggleTheme } = useTheme();
@@ -324,32 +438,11 @@ const HomePage = () => {
               })}
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            <button 
-              onClick={toggleTheme}
-              className={`p-3 rounded-2xl ${
-                isDarkMode 
-                  ? 'bg-gray-800 text-gray-400 hover:bg-gray-700' 
-                  : 'bg-white text-gray-600 hover:bg-gray-50 shadow-sm'
-              } transition-colors border ${
-                isDarkMode ? 'border-gray-700' : 'border-gray-200'
-              }`}
-            >
-              {isDarkMode ? <FiSun className="w-5 h-5" /> : <FiMoon className="w-5 h-5" />}
-            </button>
-            <button 
-              className={`p-3 rounded-2xl ${
-                isDarkMode 
-                  ? 'bg-gray-800 text-gray-400 hover:bg-gray-700' 
-                  : 'bg-white text-gray-600 hover:bg-gray-50 shadow-sm'
-              } transition-colors border ${
-                isDarkMode ? 'border-gray-700' : 'border-gray-200'
-              }`}
-            >
-              <FiBell className="w-5 h-5" />
-            </button>
-          </div>
+          
         </div>
+
+        {/* Advertisement Carousel */}
+        <AdvertisementCarousel />
 
         {/* Quick Stats */}
         <div className="grid grid-cols-2 gap-4 mb-8">

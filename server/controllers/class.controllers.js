@@ -1321,3 +1321,585 @@ export const getTeachersBySchoolCode = asyncHandler(async (req, res) => {
     return next(new AppError(error.message || "Failed to fetch teachers", 500));
   }
 });
+
+/**
+ * @desc    Get attendance statistics for a specific class
+ * @route   GET /api/classes/:classId/attendance-stats
+ * @access  Private (Teacher)
+ */
+export const getClassAttendanceStats = asyncHandler(async (req, res) => {
+  try {
+    const { classId } = req.params;
+    const teacherId = req.user?.id;
+
+    // Validate inputs
+    if (!mongoose.Types.ObjectId.isValid(classId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Class ID format"
+      });
+    }
+
+    // Find the class and verify teacher ownership
+    const classDoc = await Class.findById(classId)
+      .populate('studentList', 'fullName email _id')
+      .populate('teacherId', 'fullName email');
+
+    if (!classDoc) {
+      return res.status(404).json({
+        success: false,
+        message: "Class not found"
+      });
+    }
+
+    // Verify teacher has permission
+    if (classDoc.teacherId.toString() !== teacherId) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to view statistics for this class"
+      });
+    }
+
+    // Initialize statistics
+    const stats = {
+      // Basic Class Information
+      classInfo: {
+        className: classDoc.className,
+        classCode: classDoc.classCode,
+        batch: classDoc.batch,
+        status: classDoc.status,
+        teacherName: classDoc.teacherId.fullName,
+        schedule: classDoc.schedule
+      },
+
+      // Student Statistics
+      studentStats: {
+        totalStudents: classDoc.studentList.length,
+        activeStudents: 0,
+        newStudents: 0,
+        studentList: classDoc.studentList.map(student => ({
+          id: student._id,
+          name: student.fullName,
+          email: student.email
+        }))
+      },
+
+      // Attendance Overview
+      attendanceOverview: {
+        totalLectures: 0,
+        totalLabs: 0,
+        totalSessions: 0,
+        overallAttendance: {
+          lectures: { present: 0, total: 0, percentage: 0 },
+          labs: { present: 0, total: 0, percentage: 0 },
+          combined: { present: 0, total: 0, percentage: 0 }
+        },
+        recentAttendance: {
+          last7Days: { present: 0, total: 0, percentage: 0 },
+          last30Days: { present: 0, total: 0, percentage: 0 }
+        }
+      },
+
+      // Performance Metrics
+      performanceMetrics: {
+        averageAttendance: 0,
+        attendanceTrend: [],
+        topPerformingStudents: [],
+        studentsNeedingAttention: []
+      },
+
+      // Schedule Analysis
+      scheduleAnalysis: {
+        totalScheduledSessions: 0,
+        completedSessions: 0,
+        upcomingSessions: 0,
+        sessionDistribution: {
+          monday: 0,
+          tuesday: 0,
+          wednesday: 0,
+          thursday: 0,
+          friday: 0,
+          saturday: 0,
+          sunday: 0
+        }
+      },
+
+      // Detailed Records
+      attendanceRecords: [],
+      studentAttendanceDetails: []
+    };
+
+    // Process schedule analysis
+    classDoc.schedule.forEach(slot => {
+      stats.scheduleAnalysis.sessionDistribution[slot.day.toLowerCase()]++;
+      stats.scheduleAnalysis.totalScheduledSessions += slot.timing.length;
+    });
+
+    // Process each attendance record
+    const now = new Date();
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    classDoc.attendanceRecords.forEach(record => {
+      const recordDate = new Date(record.date);
+      const dateStr = recordDate.toISOString().split('T')[0];
+      
+      // Process lecture attendance
+      if (record.lecture && record.lecture.records) {
+        stats.attendanceOverview.totalLectures++;
+        const presentCount = record.lecture.records.filter(r => r.status === 'present').length;
+        stats.attendanceOverview.overallAttendance.lectures.present += presentCount;
+        stats.attendanceOverview.overallAttendance.lectures.total += record.lecture.records.length;
+        
+        // Check if within last 7 or 30 days
+        if (recordDate >= sevenDaysAgo) {
+          stats.attendanceOverview.recentAttendance.last7Days.present += presentCount;
+          stats.attendanceOverview.recentAttendance.last7Days.total += record.lecture.records.length;
+        }
+        if (recordDate >= thirtyDaysAgo) {
+          stats.attendanceOverview.recentAttendance.last30Days.present += presentCount;
+          stats.attendanceOverview.recentAttendance.last30Days.total += record.lecture.records.length;
+        }
+      }
+
+      // Process lab attendance
+      if (record.lab && record.lab.records) {
+        stats.attendanceOverview.totalLabs++;
+        const presentCount = record.lab.records.filter(r => r.status === 'present').length;
+        stats.attendanceOverview.overallAttendance.labs.present += presentCount;
+        stats.attendanceOverview.overallAttendance.labs.total += record.lab.records.length;
+        
+        // Check if within last 7 or 30 days
+        if (recordDate >= sevenDaysAgo) {
+          stats.attendanceOverview.recentAttendance.last7Days.present += presentCount;
+          stats.attendanceOverview.recentAttendance.last7Days.total += record.lab.records.length;
+        }
+        if (recordDate >= thirtyDaysAgo) {
+          stats.attendanceOverview.recentAttendance.last30Days.present += presentCount;
+          stats.attendanceOverview.recentAttendance.last30Days.total += record.lab.records.length;
+        }
+      }
+
+      // Add to attendance records
+      stats.attendanceRecords.push({
+        date: dateStr,
+        lecture: record.lecture ? {
+          total: record.lecture.records.length,
+          present: record.lecture.records.filter(r => r.status === 'present').length,
+          active: record.lecture.active
+        } : null,
+        lab: record.lab ? {
+          total: record.lab.records.length,
+          present: record.lab.records.filter(r => r.status === 'present').length,
+          active: record.lab.active
+        } : null
+      });
+    });
+
+    // Calculate total sessions
+    stats.attendanceOverview.totalSessions = 
+      stats.attendanceOverview.totalLectures + stats.attendanceOverview.totalLabs;
+
+    // Calculate overall attendance percentages
+    const calculatePercentage = (present, total) => 
+      total > 0 ? (present / total) * 100 : 0;
+
+    stats.attendanceOverview.overallAttendance.lectures.percentage = 
+      calculatePercentage(
+        stats.attendanceOverview.overallAttendance.lectures.present,
+        stats.attendanceOverview.overallAttendance.lectures.total
+      );
+
+    stats.attendanceOverview.overallAttendance.labs.percentage = 
+      calculatePercentage(
+        stats.attendanceOverview.overallAttendance.labs.present,
+        stats.attendanceOverview.overallAttendance.labs.total
+      );
+
+    // Calculate combined attendance
+    stats.attendanceOverview.overallAttendance.combined.present = 
+      stats.attendanceOverview.overallAttendance.lectures.present + 
+      stats.attendanceOverview.overallAttendance.labs.present;
+    
+    stats.attendanceOverview.overallAttendance.combined.total = 
+      stats.attendanceOverview.overallAttendance.lectures.total + 
+      stats.attendanceOverview.overallAttendance.labs.total;
+    
+    stats.attendanceOverview.overallAttendance.combined.percentage = 
+      calculatePercentage(
+        stats.attendanceOverview.overallAttendance.combined.present,
+        stats.attendanceOverview.overallAttendance.combined.total
+      );
+
+    // Calculate recent attendance percentages
+    stats.attendanceOverview.recentAttendance.last7Days.percentage = 
+      calculatePercentage(
+        stats.attendanceOverview.recentAttendance.last7Days.present,
+        stats.attendanceOverview.recentAttendance.last7Days.total
+      );
+
+    stats.attendanceOverview.recentAttendance.last30Days.percentage = 
+      calculatePercentage(
+        stats.attendanceOverview.recentAttendance.last30Days.present,
+        stats.attendanceOverview.recentAttendance.last30Days.total
+      );
+
+    // Calculate individual student statistics
+    stats.studentAttendanceDetails = classDoc.studentList.map(student => {
+      const studentStats = {
+        studentId: student._id,
+        fullName: student.fullName,
+        email: student.email,
+        lectures: { present: 0, total: 0, percentage: 0 },
+        labs: { present: 0, total: 0, percentage: 0 },
+        combined: { present: 0, total: 0, percentage: 0 },
+        lastAttendance: null,
+        attendanceStreak: 0,
+        needsAttention: false
+      };
+
+      let currentStreak = 0;
+      let maxStreak = 0;
+      let lastAttendanceDate = null;
+
+      classDoc.attendanceRecords.forEach(record => {
+        const recordDate = new Date(record.date);
+        
+        // Process lecture attendance
+        if (record.lecture && record.lecture.records) {
+          studentStats.lectures.total++;
+          const studentRecord = record.lecture.records.find(r => 
+            r.studentId.toString() === student._id.toString() && r.status === 'present'
+          );
+          if (studentRecord) {
+            studentStats.lectures.present++;
+            currentStreak++;
+            maxStreak = Math.max(maxStreak, currentStreak);
+            lastAttendanceDate = recordDate;
+          } else {
+            currentStreak = 0;
+          }
+        }
+
+        // Process lab attendance
+        if (record.lab && record.lab.records) {
+          studentStats.labs.total++;
+          const studentRecord = record.lab.records.find(r => 
+            r.studentId.toString() === student._id.toString() && r.status === 'present'
+          );
+          if (studentRecord) {
+            studentStats.labs.present++;
+            currentStreak++;
+            maxStreak = Math.max(maxStreak, currentStreak);
+            lastAttendanceDate = recordDate;
+          } else {
+            currentStreak = 0;
+          }
+        }
+      });
+
+      // Calculate combined attendance
+      studentStats.combined.present = 
+        studentStats.lectures.present + studentStats.labs.present;
+      studentStats.combined.total = 
+        studentStats.lectures.total + studentStats.labs.total;
+      studentStats.combined.percentage = 
+        calculatePercentage(studentStats.combined.present, studentStats.combined.total);
+
+      // Calculate individual percentages
+      studentStats.lectures.percentage = 
+        calculatePercentage(studentStats.lectures.present, studentStats.lectures.total);
+      studentStats.labs.percentage = 
+        calculatePercentage(studentStats.labs.present, studentStats.labs.total);
+
+      // Set last attendance date
+      studentStats.lastAttendance = lastAttendanceDate?.toISOString().split('T')[0] || null;
+      studentStats.attendanceStreak = maxStreak;
+
+      // Determine if student needs attention
+      studentStats.needsAttention = 
+        studentStats.combined.percentage < 70 || 
+        (lastAttendanceDate && (now - lastAttendanceDate) > 7 * 24 * 60 * 60 * 1000);
+
+      return studentStats;
+    });
+
+    // Sort and identify top performing students and those needing attention
+    const sortedStudents = [...stats.studentAttendanceDetails].sort(
+      (a, b) => b.combined.percentage - a.combined.percentage
+    );
+
+    stats.performanceMetrics.topPerformingStudents = 
+      sortedStudents.slice(0, 3).map(student => ({
+        id: student.studentId,
+        name: student.fullName,
+        attendance: student.combined.percentage
+      }));
+
+    stats.performanceMetrics.studentsNeedingAttention = 
+      sortedStudents
+        .filter(student => student.needsAttention)
+        .map(student => ({
+          id: student.studentId,
+          name: student.fullName,
+          attendance: student.combined.percentage,
+          lastAttendance: student.lastAttendance
+        }));
+
+    // Calculate average attendance
+    stats.performanceMetrics.averageAttendance = 
+      stats.studentAttendanceDetails.reduce(
+        (sum, student) => sum + student.combined.percentage, 
+        0
+      ) / stats.studentAttendanceDetails.length;
+
+    // Sort attendance records by date (newest first)
+    stats.attendanceRecords.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    // Sort student stats by name
+    stats.studentAttendanceDetails.sort((a, b) => a.fullName.localeCompare(b.fullName));
+
+    res.status(200).json({
+      success: true,
+      data: stats
+    });
+
+  } catch (error) {
+    console.error('Error fetching class attendance stats:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch attendance statistics',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * @desc    Get comprehensive dashboard details for a teacher
+ * @route   GET /api/classes/teacher-dashboard
+ * @access  Private (Teacher)
+ */
+export const getTeacherDashboardDetails = asyncHandler(async (req, res) => {
+  console.log("req.user",req.user);
+  try {
+    console.log('[Dashboard] Request received:', { teacherId: req.user?.id });
+    
+    const teacherId = req.user?.id;
+    console.log("teacherId",teacherId);
+
+    // Validate teacher
+    if (!teacherId) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authorized"
+      });
+    }
+
+    // Get all classes for this teacher
+    const classes = await Class.find({ teacherId })
+      .populate('studentList', 'fullName email')
+      .select('className schedule classCode batch studentList status attendanceRecords');
+
+    if (!classes) {
+      return res.status(404).json({
+        success: false,
+        message: "No classes found"
+      });
+    }
+
+    // Initialize dashboard data structure
+    const dashboardData = {
+      overview: {
+        totalClasses: classes.length,
+        totalStudents: 0,
+        activeClasses: 0,
+        totalAttendanceSessions: 0
+      },
+      attendanceStats: {
+        overall: {
+          present: 0,
+          absent: 0,
+          total: 0,
+          percentage: 0
+        },
+        byClass: [],
+        byDay: {
+          monday: 0,
+          tuesday: 0,
+          wednesday: 0,
+          thursday: 0,
+          friday: 0,
+          saturday: 0,
+          sunday: 0
+        }
+      },
+      recentActivity: {
+        lastAttendanceSessions: [],
+        upcomingClasses: []
+      },
+      classDetails: []
+    };
+
+    // Get current date info
+    const now = new Date();
+    const today = now.getDay();
+    const currentTime = now.getHours() * 60 + now.getMinutes();
+
+    // Process each class
+    for (const cls of classes) {
+      // Update total students (avoiding duplicates)
+      const uniqueStudents = new Set([...cls.studentList.map(s => s._id.toString())]);
+      dashboardData.overview.totalStudents += uniqueStudents.size;
+
+      // Update active classes count
+      if (cls.status === 'active') {
+        dashboardData.overview.activeClasses++;
+      }
+
+      // Process attendance records
+      let classAttendance = {
+        classId: cls._id,
+        className: cls.className,
+        present: 0,
+        absent: 0,
+        total: 0
+      };
+
+      // Get last 30 days attendance
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      
+      cls.attendanceRecords.forEach(record => {
+        const recordDate = new Date(record.date);
+        
+        // Count total sessions
+        if (record.lecture?.records?.length > 0) {
+          dashboardData.overview.totalAttendanceSessions++;
+          classAttendance.total++;
+          
+          const presentCount = record.lecture.records.filter(r => r.status === 'present').length;
+          classAttendance.present += presentCount;
+          classAttendance.absent += record.lecture.records.length - presentCount;
+
+          // Add to recent activity if within last 7 days
+          if (recordDate >= thirtyDaysAgo) {
+            dashboardData.recentActivity.lastAttendanceSessions.push({
+              classId: cls._id,
+              className: cls.className,
+              date: record.date,
+              type: 'lecture',
+              attendance: {
+                present: presentCount,
+                total: record.lecture.records.length
+              }
+            });
+          }
+        }
+
+        if (record.lab?.records?.length > 0) {
+          dashboardData.overview.totalAttendanceSessions++;
+          classAttendance.total++;
+          
+          const presentCount = record.lab.records.filter(r => r.status === 'present').length;
+          classAttendance.present += presentCount;
+          classAttendance.absent += record.lab.records.length - presentCount;
+
+          // Add to recent activity if within last 7 days
+          if (recordDate >= thirtyDaysAgo) {
+            dashboardData.recentActivity.lastAttendanceSessions.push({
+              classId: cls._id,
+              className: cls.className,
+              date: record.date,
+              type: 'lab',
+              attendance: {
+                present: presentCount,
+                total: record.lab.records.length
+              }
+            });
+          }
+        }
+      });
+
+      // Calculate class attendance percentage
+      classAttendance.percentage = classAttendance.total > 0
+        ? (classAttendance.present / (classAttendance.present + classAttendance.absent)) * 100
+        : 0;
+
+      dashboardData.attendanceStats.byClass.push(classAttendance);
+
+      // Update overall attendance stats
+      dashboardData.attendanceStats.overall.present += classAttendance.present;
+      dashboardData.attendanceStats.overall.absent += classAttendance.absent;
+      dashboardData.attendanceStats.overall.total += classAttendance.total;
+
+      // Process schedule for upcoming classes
+      cls.schedule.forEach(slot => {
+        // Count classes by day
+        dashboardData.attendanceStats.byDay[slot.day.toLowerCase()]++;
+
+        // Check for upcoming classes today
+        if (today === ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'].indexOf(slot.day.toLowerCase())) {
+          slot.timing.forEach(time => {
+            const [hours, minutes] = time.split(':').map(Number);
+            const classTime = hours * 60 + minutes;
+            
+            if (classTime > currentTime) {
+              dashboardData.recentActivity.upcomingClasses.push({
+                classId: cls._id,
+                className: cls.className,
+                time: time,
+                day: slot.day
+              });
+            }
+          });
+        }
+      });
+
+      // Add to class details
+      dashboardData.classDetails.push({
+        classId: cls._id,
+        className: cls.className,
+        classCode: cls.classCode,
+        batch: cls.batch,
+        studentCount: uniqueStudents.size,
+        status: cls.status,
+        schedule: cls.schedule
+      });
+    }
+
+    // Calculate overall attendance percentage
+    dashboardData.attendanceStats.overall.percentage = 
+      dashboardData.attendanceStats.overall.total > 0
+        ? (dashboardData.attendanceStats.overall.present / 
+          (dashboardData.attendanceStats.overall.present + dashboardData.attendanceStats.overall.absent)) * 100
+        : 0;
+
+    // Sort recent activities by date
+    dashboardData.recentActivity.lastAttendanceSessions.sort((a, b) => 
+      new Date(b.date) - new Date(a.date)
+    );
+
+    // Sort upcoming classes by time
+    dashboardData.recentActivity.upcomingClasses.sort((a, b) => {
+      const [aHours, aMinutes] = a.time.split(':').map(Number);
+      const [bHours, bMinutes] = b.time.split(':').map(Number);
+      return (aHours * 60 + aMinutes) - (bHours * 60 + bMinutes);
+    });
+
+    // Limit recent activities to last 10
+    dashboardData.recentActivity.lastAttendanceSessions = 
+      dashboardData.recentActivity.lastAttendanceSessions.slice(0, 10);
+
+    res.status(200).json({
+      success: true,
+      data: dashboardData
+    });
+
+  } catch (error) {
+    console.error('Error fetching teacher dashboard details:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch dashboard details',
+      error: error.message
+    });
+  }
+});

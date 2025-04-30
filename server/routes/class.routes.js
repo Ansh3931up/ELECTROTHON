@@ -16,7 +16,9 @@ import {
   getAttendanceByDateAndType,
   getOngoingAttendance,
   getStudentTotalAttendance,
-  joinClass
+  joinClass,
+  getClassAttendanceStats,
+  getTeacherDashboardDetails
 } from "../controllers/class.controllers.js";
 
 const router = Router();
@@ -35,6 +37,9 @@ router.get('/student/:studentId/total-attendance', getStudentTotalAttendance);
 
 // --- NEW ROUTE for Teacher's Schedule ---
 router.get('/my-schedule', verifyJWT, getTeacherSchedule); //in use
+
+// Add teacher dashboard route
+router.get('/teacher-dashboard', verifyJWT, getTeacherDashboardDetails);
 
 // --- Attendance Routes ---
 // New routes for managing attendance sessions
@@ -55,5 +60,10 @@ router.patch('/:classId', verifyJWT, editClassDetails);
 
 // Add route for joining a class
 router.post('/:classId/join', verifyJWT, joinClass);
+
+// Add new route for getting class attendance statistics
+router.get('/:classId/attendance-stats', verifyJWT, getClassAttendanceStats);
+
+
 
 export default router;

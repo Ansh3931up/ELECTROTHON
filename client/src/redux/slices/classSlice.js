@@ -1,5 +1,6 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import axios from "axios";
+// import { axiosInstance } from '../../utils/axios';
 
 
 const API_URL = "http://localhost:5014/api/v1" + "/class";
@@ -390,6 +391,56 @@ export const joinClass = createAsyncThunk(
   }
 );
 
+// Thunks
+export const fetchTeacherClasses = createAsyncThunk(
+  'class/fetchTeacherClasses',
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await axios.get(`${API_URL}/teacher`);
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to fetch classes');
+    }
+  }
+);
+
+// Add new thunk for fetching class attendance statistics
+export const fetchClassAttendanceStats = createAsyncThunk(
+  'class/fetchAttendanceStats',
+  async (classId, { rejectWithValue }) => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await axios.get(`${API_URL}/${classId}/attendance-stats`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      console.log("Attendance stats:", response.data);
+      return response.data.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to fetch attendance statistics');
+    }
+  }
+);
+
+// Add new thunk for fetching teacher dashboard data
+export const fetchTeacherDashboard = createAsyncThunk(
+  'class/fetchTeacherDashboard',
+  async (_, { rejectWithValue }) => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await axios.get(`${API_URL}/teacher-dashboard`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      console.log("Dashboard data:", response.data);
+      return response.data.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to fetch dashboard data');
+    }
+  }
+);
 
 const classSlice = createSlice({
   name: "class",
@@ -416,6 +467,12 @@ const classSlice = createSlice({
     fetchingTotalAttendance: false,
     totalAttendanceError: null,
     teachers: [], // Add teachers array to store teachers and their classes
+    // Add dashboard state
+    dashboard: {
+      data: null,
+      loading: false,
+      error: null
+    }
   },
   reducers: {
     setSelectedClass: (state, action) => {
@@ -440,6 +497,9 @@ const classSlice = createSlice({
       state.totalAttendance = null;
       state.totalAttendanceError = null;
     },
+    clearDashboard: (state) => {
+      state.dashboard = { data: null, loading: false, error: null };
+    }
   },
   extraReducers: (builder) => {
     builder
@@ -632,9 +692,43 @@ const classSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
       })
-      
+      // Fetch Teacher Classes
+      .addCase(fetchTeacherClasses.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchTeacherClasses.fulfilled, (state, action) => {
+        state.loading = false;
+        state.classes = action.payload;
+      })
+      .addCase(fetchTeacherClasses.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      // Add cases for fetchTeacherDashboard
+      .addCase(fetchTeacherDashboard.pending, (state) => {
+        state.dashboard.loading = true;
+        state.dashboard.error = null;
+      })
+      .addCase(fetchTeacherDashboard.fulfilled, (state, action) => {
+        state.dashboard.loading = false;
+        
+        state.dashboard.data = action.payload;
+      })
+      .addCase(fetchTeacherDashboard.rejected, (state, action) => {
+        state.dashboard.loading = false;
+        state.dashboard.error = action.payload;
+      });
   },
 });
 
-export const { setSelectedClass, clearCurrentClass, clearAttendanceError, clearTeacherSchedule, clearOngoingAttendance, clearTotalAttendance } = classSlice.actions;
+export const { 
+  setSelectedClass, 
+  clearCurrentClass, 
+  clearAttendanceError, 
+  clearTeacherSchedule, 
+  clearOngoingAttendance, 
+  clearTotalAttendance,
+  clearDashboard 
+} = classSlice.actions;
 export default classSlice.reducer;

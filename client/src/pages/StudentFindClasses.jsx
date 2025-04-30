@@ -134,8 +134,8 @@ const StudentFindClasses = () => {
       <div className="bg-gradient-to-r py-6 ">
         <div className="px-4">
           <h1 className={`text-xl font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-            Find Classes
-          </h1>
+          Find Classes
+        </h1>
           <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
             Discover and join your favorite classes
           </p>
@@ -146,17 +146,17 @@ const StudentFindClasses = () => {
         {/* Mobile-optimized Search Bar */}
         <div className="mb-4 space-y-3">
           <div className="relative">
-            <input
-              type="text"
+          <input
+            type="text"
               placeholder="Search classes..."
-              value={searchQuery}
+            value={searchQuery}
               onChange={(e) => handleSearchChange(e.target.value)}
               className={`w-full px-4 py-3 pl-10 pr-10 rounded-xl border-0 text-base
                 ${isDarkMode 
                   ? 'bg-gray-800/50 text-white placeholder-gray-400' 
                   : 'bg-white text-gray-900 placeholder-gray-500'
                 } focus:outline-none focus:ring-2 focus:ring-purple-500/30 shadow-sm`}
-            />
+          />
             <FiSearch className="absolute left-3 top-3.5 h-5 w-5 text-purple-500" />
             {searchQuery && (
               <button
@@ -224,25 +224,25 @@ const StudentFindClasses = () => {
                 {teacher.classes.map(cls => {
                   const gradientClass = getRandomGradient();
                   return (
-                    <div 
-                      key={cls._id}
+                  <div 
+                    key={cls._id}
                       className={`rounded-xl transition-all duration-300 bg-gradient-to-br ${gradientClass} 
                         active:scale-95 touch-manipulation relative overflow-hidden flex flex-col h-[160px]
                         shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200`}
-                    >
+                  >
                       {/* Main content with padding */}
                       <div className="p-3 flex-1 relative z-10">
                         <div className="space-y-2">
                           <h3 className="text-sm font-bold text-white leading-tight drop-shadow-sm">
-                            {cls.className}
-                          </h3>
+                        {cls.className}
+                      </h3>
 
                           <div className="space-y-1.5">
                             <div className="flex items-center space-x-1.5 text-white/90">
                               <FiHash className="h-3 w-3 drop-shadow" />
                               <p className="text-xs drop-shadow">
                                 {cls.classCode}
-                              </p>
+                      </p>
                             </div>
 
                             <div className="flex items-center space-x-1.5 text-white/90">
@@ -257,17 +257,17 @@ const StudentFindClasses = () => {
                                 <FiUsers className="h-3 w-3 drop-shadow" />
                                 <p className="text-xs drop-shadow">
                                   {cls.students.length} Students
-                                </p>
-                              </div>
+                      </p>
+                    </div>
                             )}
                           </div>
                         </div>
                       </div>
 
                       {/* Updated Join button with enhanced shadows and highlights */}
-                      <button
-                        onClick={() => handleJoinClass(cls._id)}
-                        disabled={joiningClass === cls._id}
+                    <button
+                      onClick={() => handleJoinClass(cls._id)}
+                      disabled={joiningClass === cls._id}
                         className={`w-full py-2.5 px-3 transition-all duration-200 font-medium text-sm relative
                           ${joiningClass === cls._id
                             ? isDarkMode
@@ -282,7 +282,7 @@ const StudentFindClasses = () => {
                           shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] hover:shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.15)]
                           ${isDarkMode ? 'shadow-dark' : 'shadow-light'}
                         `}
-                      >
+                    >
                         <div className="flex items-center justify-center space-x-1">
                           {joiningClass === cls._id ? (
                             <>
@@ -293,8 +293,8 @@ const StudentFindClasses = () => {
                             <span className="drop-shadow-sm">Join Class</span>
                           )}
                         </div>
-                      </button>
-                    </div>
+                    </button>
+                  </div>
                   );
                 })}
               </div>
