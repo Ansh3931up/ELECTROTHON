@@ -119,6 +119,47 @@ export const fetchTeachersBySchool = createAsyncThunk(
   }
 );
 
+export const forgotPassword = createAsyncThunk(
+  'auth/forgotPassword',
+  async (email, { rejectWithValue }) => {
+    try {
+      const response = await axios.post(`${API_URL}/forgot-password`, { email });
+      console.log("forgotPassword",response.data);
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.response.data);
+    }
+  }
+);
+
+export const verifyOTP = createAsyncThunk(
+  'auth/verifyOTP',
+  async ({ email, otp }, { rejectWithValue }) => {
+    try {
+      const response = await axios.post(`${API_URL}/verify-otp`, { email, otp });
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.response.data);
+    }
+  }
+);
+
+export const resetPassword = createAsyncThunk(
+  'auth/resetPassword',
+  async ({ email, otp, newPassword }, { rejectWithValue }) => {
+    try {
+      const response = await axios.post(`${API_URL}/reset-password`, {
+        email,
+        otp,
+        newPassword
+      });
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.response.data);
+    }
+  }
+);
+
 // Retrieve user from localStorage
 const storedUser = JSON.parse(localStorage.getItem('user')) || null;
 console.log("storedUser",storedUser);
@@ -149,16 +190,28 @@ const authSlice = createSlice({
         state.error = null;
       })
       .addCase(loginUser.fulfilled, (state, action) => {
-        state.user = action.payload.user;
         state.loading = false;
-        state.isAuthenticated = true; // Set authenticated on login success
-        localStorage.setItem('user', JSON.stringify(action.payload)); // Save the user data
-        localStorage.setItem('token', action.payload.token); // Save the token
+        state.error = null;
+        state.isAuthenticated = true;
         
-        // Fix: Make sure role is properly stored from the right location in payload
-        const userRole = action.payload.user?.role || action.payload.role;
-        console.log('Setting user role:', userRole); // Debug log
-        localStorage.setItem('userRole', userRole); // Save the role
+        // Ensure proper user data structure
+        state.user = {
+          user: action.payload.user,
+          token: action.payload.token
+        };
+        
+        // Save to localStorage with consistent structure
+        localStorage.setItem('user', JSON.stringify({
+          user: action.payload.user,
+          token: action.payload.token
+        }));
+        localStorage.setItem('token', action.payload.token);
+        
+        // Save role from the correct location
+        const userRole = action.payload.user?.role;
+        if (userRole) {
+          localStorage.setItem('userRole', userRole);
+        }
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.error = action.payload;
@@ -285,6 +338,42 @@ const authSlice = createSlice({
       .addCase(fetchTeachersBySchool.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
+      })
+      .addCase(forgotPassword.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(forgotPassword.fulfilled, (state) => {
+        state.loading = false;
+        state.error = null;
+      })
+      .addCase(forgotPassword.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload?.message || 'Failed to send OTP';
+      })
+      .addCase(verifyOTP.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(verifyOTP.fulfilled, (state) => {
+        state.loading = false;
+        state.error = null;
+      })
+      .addCase(verifyOTP.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload?.message || 'Failed to verify OTP';
+      })
+      .addCase(resetPassword.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(resetPassword.fulfilled, (state) => {
+        state.loading = false;
+        state.error = null;
+      })
+      .addCase(resetPassword.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload?.message || 'Failed to reset password';
       });
   },
 });

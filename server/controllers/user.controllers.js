@@ -1,5 +1,6 @@
 import User from "../models/user.model.js";
 import AppError from "../utils/error.utils.js";
+import { sendEmail } from '../utils/sendEmail.js';
 
 const registerUser = async (req, res, next) => {
   try {
@@ -216,7 +217,142 @@ const updateFaceData = async (req, res, next) => {
   }
 };
 
+const forgotPassword = async (req, res, next) => {
+  try {
+    console.log('Forgot Password Request:', req.body);
+    const { email } = req.body;
 
+    if (!email) {
+      console.log('Email missing in request');
+      return next(new AppError("Email is required", 400));
+    }
+
+    const user = await User.findOne({ email });
+    console.log('User found:', user ? 'Yes' : 'No');
+    
+    if (!user) {
+      return next(new AppError("User not found", 404));
+    }
+
+    // Generate OTP
+    const otp = await user.generatePasswordResetToken();
+    console.log('Generated OTP:', otp);
+
+    // Prepare email content
+    const emailHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #2563eb;">Password Reset Request</h2>
+        <p>You have requested to reset your password. Please use the following OTP to proceed:</p>
+        <div style="background-color: #f3f4f6; padding: 20px; text-align: center; margin: 20px 0;">
+          <h1 style="color: #2563eb; margin: 0; font-size: 32px;">${otp}</h1>
+        </div>
+        <p>This OTP will expire in 15 minutes.</p>
+        <p>If you didn't request this, please ignore this email.</p>
+      </div>
+    `;
+
+    // Send email using the utility function
+    try {
+      await sendEmail(
+        email,
+        'Password Reset OTP',
+        emailHtml
+      );
+      console.log('Email sent successfully');
+    } catch (emailError) {
+      console.error('Failed to send email:', emailError);
+      // Reset the OTP if email fails
+      user.forgotPasswordToken = null;
+      user.forgotPasswordExpiry = null;
+      await user.save();
+      return next(new AppError("Failed to send OTP email. Please try again.", 500));
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "OTP sent to your email"
+    });
+  } catch (error) {
+    console.error('Error in forgotPassword:', error);
+    return next(new AppError("Failed to process password reset request", 500));
+  }
+};
+
+const verifyOTP = async (req, res, next) => {
+  try {
+    console.log('Verify OTP Request:', req.body);
+    const { email, otp } = req.body;
+
+    if (!email || !otp) {
+      console.log('Missing required fields:', { email: !!email, otp: !!otp });
+      return next(new AppError("Email and OTP are required", 400));
+    }
+
+    const user = await User.findOne({ email });
+    console.log('User found for OTP verification:', user ? 'Yes' : 'No');
+    
+    if (!user) {
+      return next(new AppError("User not found", 404));
+    }
+
+    const isValid = await user.verifyPasswordResetToken(otp);
+    console.log('OTP Verification result:', isValid);
+
+    if (!isValid) {
+      return next(new AppError("Invalid or expired OTP", 400));
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "OTP verified successfully"
+    });
+  } catch (error) {
+    console.error('Error in verifyOTP:', error);
+    return next(new AppError("Failed to verify OTP", 500));
+  }
+};
+
+const resetPassword = async (req, res, next) => {
+  try {
+    console.log('Reset Password Request:', req.body);
+    const { email, otp, newPassword } = req.body;
+
+    if (!email || !otp || !newPassword) {
+      console.log('Missing required fields:', { 
+        email: !!email, 
+        otp: !!otp, 
+        newPassword: !!newPassword 
+      });
+      return next(new AppError("All fields are required", 400));
+    }
+
+    const user = await User.findOne({ email });
+    console.log('User found for password reset:', user ? 'Yes' : 'No');
+    
+    if (!user) {
+      return next(new AppError("User not found", 404));
+    }
+
+    const isValid = await user.verifyPasswordResetToken(otp);
+    console.log('Final OTP verification result:', isValid);
+    
+    if (!isValid) {
+      return next(new AppError("Invalid or expired OTP", 400));
+    }
+
+    console.log('Resetting password...');
+    await user.resetPassword(newPassword);
+    console.log('Password reset successful');
+
+    res.status(200).json({
+      success: true,
+      message: "Password reset successfully"
+    });
+  } catch (error) {
+    console.error('Error in resetPassword:', error);
+    return next(new AppError("Failed to reset password", 500));
+  }
+};
 
 export {
   registerUser,
@@ -227,4 +363,7 @@ export {
   getAllStudents,
   getAllSchoolCodes,
   updateFaceData,
+  forgotPassword,
+  verifyOTP,
+  resetPassword
 };

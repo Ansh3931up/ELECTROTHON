@@ -4,20 +4,28 @@ import { useDispatch, useSelector } from 'react-redux';
 import { Link, useLocation,useNavigate } from 'react-router-dom';
 
 import logo from '../assets/logo1112.png';
+import { useTheme } from '../context/ThemeContext';
 import { logoutUser } from '../redux/slices/authSlice';
 import BottomNavBar from './BottomNavBar';
-import { useTheme } from '../context/ThemeContext';
 import ThemeToggleButton from './ThemeToggleButton';
 
 const NavBar = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const location = useLocation();
-  const user = useSelector((state) => state.auth.user);
+  const { user, isAuthenticated } = useSelector((state) => state.auth);
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [isLogoAnimating, setIsLogoAnimating] = useState(false);
   const [currentPage, setCurrentPage] = useState('');
   const { isDarkMode } = useTheme();
+
+  // Debug logs for authentication state
+  useEffect(() => {
+    console.log('NavBar Auth State:', { user, isAuthenticated });
+  }, [user, isAuthenticated]);
+
+  // Get the actual user data
+  const actualUser = user?.user;
 
   // Determine current page name based on URL path
   useEffect(() => {
@@ -108,40 +116,6 @@ const NavBar = () => {
     window.location.reload();
   };
 
-  // Main navigation items
-  const mainNavItems = [
-    { 
-      label: 'Dashboard', 
-      path: '/dashboard', 
-      icon: (
-        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M4 5C4 4.44772 4.44772 4 5 4H9C9.55228 4 10 4.44772 10 5V9C10 9.55228 9.55228 10 9 10H5C4.44772 10 4 9.55228 4 9V5Z" fill="currentColor" />
-          <path d="M14 5C14 4.44772 14.4477 4 15 4H19C19.5523 4 20 4.44772 20 5V9C20 9.55228 19.5523 10 19 10H15C14.4477 10 14 9.55228 14 9V5Z" fill="currentColor" />
-          <path d="M4 15C4 14.4477 4.44772 14 5 14H9C9.55228 14 10 14.4477 10 15V19C10 19.5523 9.55228 20 9 20H5C4.44772 20 4 19.5523 4 19V15Z" fill="currentColor" />
-          <path d="M14 15C14 14.4477 14.4477 14 15 14H19C19.5523 14 20 14.4477 20 15V19C20 19.5523 19.5523 20 19 20H15C14.4477 20 14 19.5523 14 19V15Z" fill="currentColor" />
-        </svg>
-      ),
-    },
-    { 
-      label: 'Classes', 
-      path: '/classes', 
-      icon: (
-        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M12 6.25278V19.2528M12 6.25278C10.8321 5.47686 9.24649 5 7.5 5C5.75351 5 4.16789 5.47686 3 6.25278V19.2528C4.16789 18.4769 5.75351 18 7.5 18C9.24649 18 10.8321 18.4769 12 19.2528M12 6.25278C13.1679 5.47686 14.7535 5 16.5 5C18.2465 5 19.8321 5.47686 21 6.25278V19.2528C19.8321 18.4769 18.2465 18 16.5 18C14.7535 18 13.1679 18.4769 12 19.2528" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      ),
-    },
-    { 
-      label: 'Reports', 
-      path: '/reports', 
-      icon: (
-        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M9 5H7C5.89543 5 5 5.89543 5 7V19C5 20.1046 5.89543 21 7 21H17C18.1046 21 19 20.1046 19 19V7C19 5.89543 18.1046 5 17 5H15M9 5C9 6.10457 9.89543 7 11 7H13C14.1046 7 15 6.10457 15 5M9 5C9 3.89543 9.89543 3 11 3H13C14.1046 3 15 3.89543 15 5M12 12H15M12 16H15M9 12H9.01M9 16H9.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-        </svg>
-      ),
-    },
-  ];
-
   // Account & Settings navigation items
   const accountNavItems = [
     { 
@@ -212,7 +186,7 @@ const NavBar = () => {
       <path d="M20 12H7M20 12L17 9M20 12L17 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
-  console.log("user is : ",user);
+  console.log("user is : ",actualUser);
 
   return (
     <>
@@ -244,154 +218,138 @@ const NavBar = () => {
           {/* Right side controls */}
           <div className="flex items-center gap-3">
             {/* Hamburger menu button */}
-            {user ? (
+            {actualUser && isAuthenticated ? (
               <button 
                 className="hamburger-btn relative p-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/10 text-black dark:text-white transition-colors flex items-center justify-center"
                 onClick={() => setSidebarOpen(!isSidebarOpen)}
                 aria-label="Toggle menu"
                 style={{ color: isDarkMode ? '#bfdbfe' : '#374151' }}>
                 <div className="w-5 h-5 relative">
-                 <FiAlignRight size={22} />
-                 </div>
+                  <FiAlignRight size={22} />
+                </div>
               </button>
-            ) : (
-              <p></p>
-            )}
+            ) : null}
           </div>
         </div>
       </nav>
 
       {/* Enhanced mobile sidebar */}
-      {user && (
+      {actualUser && isAuthenticated && (
         <div
           className={`sidebar fixed top-0 right-0 h-full w-full sm:w-80 shadow-xl z-50 transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : 'translate-x-full'} ${isDarkMode ? 'bg-gray-900' : 'bg-[#002550]'}`}
         >
-          {/* Sidebar header - Use conditional gradient */}
-          <div className={`px-4 py-2.5 flex justify-between items-center ${isDarkMode ? 'bg-gradient-to-r from-gray-800 to-gray-900' : 'bg-gradient-to-r from-[#002040] to-[#003065]'}`}>
-            <div className="flex items-center">
-              <div className="w-8 h-8 flex items-center justify-center overflow-hidden">
+          {/* Sidebar header with modern styling */}
+          <div className={`px-4 py-3 flex justify-between items-center border-b backdrop-blur-sm ${isDarkMode ? 'border-gray-800/50 bg-gray-900/80' : 'border-[#003065]/50 bg-[#002550]/80'}`}>
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 flex items-center justify-center overflow-hidden rounded-lg ring-2 ring-white/10">
                 <img src={logo} alt="Logo" className="w-full h-full object-contain" />
               </div>
-              <h1 className="text-lg font-medium ml-2.5 tracking-wide">
+              <h1 className="text-lg font-medium tracking-wide">
                 <span className="font-semibold text-white">Neura<span className='text-sky-400'>Campus</span></span>
               </h1>
             </div>
             <button
               onClick={() => setSidebarOpen(false)}
-              className="p-2 rounded-full text-white hover:bg-white/10 transition-colors"
+              className="p-2 rounded-lg text-white hover:bg-white/10 transition-all duration-200 hover:scale-105"
               aria-label="Close menu"
             >
               {closeIcon}
             </button>
           </div>
           
-          {/* User profile section - Use conditional styling */}
-          <div className="px-4 py-5">
-            <div className={`flex items-center rounded-lg px-4 py-3.5 ${isDarkMode ? 'bg-gray-700/50' : 'bg-[#0a3677]'}`}>
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm ${isDarkMode ? 'bg-gray-600' : 'bg-[#1e4c8a]'}`}>
-                {user.user?.name ? user.user.name.charAt(0).toUpperCase() : 'U'}
+          {/* Main content area with fixed height and scroll */}
+          <div className="flex flex-col h-[calc(100%-3.5rem)]">
+            {/* Scrollable content */}
+            <div className="flex-1 overflow-y-auto">
+              {/* User profile section with modern styling */}
+              <div className="px-4 py-4 border-b ${isDarkMode ? 'border-gray-800/50' : 'border-[#003065]/50'}">
+                <div className={`flex items-center rounded-xl px-4 py-3 backdrop-blur-sm ${isDarkMode ? 'bg-gray-800/50' : 'bg-[#002040]/50'} transition-all duration-200 hover:bg-opacity-70`}>
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg ring-2 ring-white/10 ${isDarkMode ? 'bg-gray-700' : 'bg-[#002550]'}`}>
+                    {actualUser?.name ? actualUser.name.charAt(0).toUpperCase() : 'U'}
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-white font-medium">{actualUser?.name || 'User'}</p>
+                    <p className="text-white/60 text-sm">{actualUser?.email || 'user@example.com'}</p>
+                  </div>
+                </div>
               </div>
-              <div className="ml-3">
-                <p className="text-white font-medium">{user.user?.name || 'User'}</p>
-                <p className={`${isDarkMode ? 'text-gray-400' : 'text-white/60'} text-xs`}>{user.user?.email || 'user@example.com'}</p>
+
+              {/* Navigation Sections with modern styling */}
+              <div className="space-y-6 px-4 py-4">
+                {/* Account & Settings Section */}
+                <div>
+                  <div className="text-white/60 text-xs font-medium uppercase tracking-wider mb-3 px-1">
+                    ACCOUNT & SETTINGS
+                  </div>
+                  <ul className="space-y-1.5">
+                    {accountNavItems.map((item, index) => (
+                      <li key={index}>
+                        <Link 
+                          to={item.path} 
+                          className={`flex items-center px-3 py-2.5 rounded-xl transition-all duration-200 hover:scale-[1.02] ${isDarkMode ? 'text-white hover:bg-gray-800/50 active:bg-gray-700/50' : 'text-white hover:bg-[#002550]/50 active:bg-[#002040]/50'}`}
+                          onClick={() => setSidebarOpen(false)}
+                        >
+                          <div className={`w-9 h-9 flex items-center justify-center rounded-lg mr-3 ring-1 ring-white/10 ${isDarkMode ? 'bg-gray-800/50' : 'bg-[#002550]/50'}`}>
+                            <span className="text-white">{item.icon}</span>
+                          </div>
+                          <span className="font-medium">{item.label}</span>
+                          {item.badge && (
+                            <div className="ml-auto bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center ring-1 ring-white/20">
+                              {item.badge}
+                            </div>
+                          )}
+                        </Link>
+                      </li>
+                    ))}
+                    <li className="px-3 py-2.5 flex items-center justify-between rounded-xl transition-all duration-200 hover:scale-[1.02]">
+                      <span className="font-medium text-white">Dark Mode</span>
+                      <ThemeToggleButton />
+                    </li>
+                  </ul>
+                </div>
+
+                {/* Support & Help Section */}
+                <div>
+                  <div className="text-white/60 text-xs font-medium uppercase tracking-wider mb-3 px-1">
+                    SUPPORT & HELP
+                  </div>
+                  <ul className="space-y-1.5">
+                    {supportNavItems.map((item, index) => (
+                      <li key={index}>
+                        <Link 
+                          to={item.path} 
+                          className={`flex items-center px-3 py-2.5 rounded-xl transition-all duration-200 hover:scale-[1.02] ${isDarkMode ? 'text-white hover:bg-gray-800/50 active:bg-gray-700/50' : 'text-white hover:bg-[#002550]/50 active:bg-[#002040]/50'}`}
+                          onClick={() => setSidebarOpen(false)}
+                        >
+                          <div className={`w-9 h-9 flex items-center justify-center rounded-lg mr-3 ring-1 ring-white/10 ${isDarkMode ? 'bg-gray-800/50' : 'bg-[#002550]/50'}`}>
+                            <span className="text-white">{item.icon}</span>
+                          </div>
+                          <span className="font-medium">{item.label}</span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Main Navigation Section - Use conditional styling */}
-          <div className="py-2">
-            <div className={`${isDarkMode ? 'text-gray-500' : 'text-gray-400'} text-xs font-medium uppercase tracking-wider px-5 py-2`}>
-              MAIN
+            {/* Fixed sign out button with modern styling */}
+            <div className="px-4 py-4 border-t ${isDarkMode ? 'border-gray-800/50' : 'border-[#003065]/50'} backdrop-blur-sm">
+              <button 
+                onClick={handleLogout}
+                className="w-full py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all duration-200 hover:scale-[1.02] flex items-center justify-center font-medium ring-1 ring-white/10"
+              >
+                {signOutIcon} Sign Out
+              </button>
             </div>
-            <ul className="space-y-1 px-3">
-              {mainNavItems.map((item, index) => (
-                <li key={index}>
-                  <Link 
-                    to={item.path} 
-                    className={`flex items-center px-4 py-2.5 rounded-lg transition-colors ${isDarkMode ? 'text-gray-300 hover:bg-gray-700 active:bg-gray-600' : 'text-white hover:bg-blue-700/30 active:bg-blue-700/40'}`}
-                    onClick={() => setSidebarOpen(false)}
-                  >
-                    <div className={`w-8 h-8 flex items-center justify-center rounded-md mr-3 ${isDarkMode ? 'bg-gray-700' : 'bg-blue-600/30'}`}>
-                      <span className={`${isDarkMode ? 'text-gray-400' : 'text-white'}`}>{item.icon}</span>
-                    </div>
-                    <span className="font-medium">{item.label}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Account & Settings Section - Use conditional styling */}
-          <div className="py-2">
-            <div className={`${isDarkMode ? 'text-gray-500' : 'text-gray-400'} text-xs font-medium uppercase tracking-wider px-5 py-2`}>
-              ACCOUNT & SETTINGS
-            </div>
-            <ul className="space-y-1 px-3">
-              {accountNavItems.map((item, index) => (
-                <li key={index}>
-                  <Link 
-                    to={item.path} 
-                    className={`flex items-center px-4 py-2.5 rounded-lg transition-colors ${isDarkMode ? 'text-gray-300 hover:bg-gray-700 active:bg-gray-600' : 'text-white hover:bg-blue-700/30 active:bg-blue-700/40'}`}
-                    onClick={() => setSidebarOpen(false)}
-                  >
-                    <div className={`w-8 h-8 flex items-center justify-center rounded-md mr-3 ${isDarkMode ? 'bg-gray-700' : 'bg-blue-600/30'}`}>
-                      <span className={`${isDarkMode ? 'text-gray-400' : 'text-white'}`}>{item.icon}</span>
-                    </div>
-                    <span className="font-medium">{item.label}</span>
-                    {item.badge && (
-                      <div className="ml-auto bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                        {item.badge}
-                      </div>
-                    )}
-                  </Link>
-                </li>
-              ))}
-              <li className="px-4 py-2.5 flex items-center justify-between">
-                <span className={`font-medium ${isDarkMode ? 'text-gray-300' : 'text-white'}`}>Dark Mode</span>
-                <ThemeToggleButton />
-              </li>
-            </ul>
-          </div>
-
-          {/* Support & Help Section - Use conditional styling */}
-          <div className="py-2">
-            <div className={`${isDarkMode ? 'text-gray-500' : 'text-gray-400'} text-xs font-medium uppercase tracking-wider px-5 py-2`}>
-              SUPPORT & HELP
-            </div>
-            <ul className="space-y-1 px-3">
-              {supportNavItems.map((item, index) => (
-                <li key={index}>
-                  <Link 
-                    to={item.path} 
-                    className={`flex items-center px-4 py-2.5 rounded-lg transition-colors ${isDarkMode ? 'text-gray-300 hover:bg-gray-700 active:bg-gray-600' : 'text-white hover:bg-blue-700/30 active:bg-blue-700/40'}`}
-                    onClick={() => setSidebarOpen(false)}
-                  >
-                    <div className={`w-8 h-8 flex items-center justify-center rounded-md mr-3 ${isDarkMode ? 'bg-gray-700' : 'bg-blue-600/30'}`}>
-                      <span className={`${isDarkMode ? 'text-gray-400' : 'text-white'}`}>{item.icon}</span>
-                    </div>
-                    <span className="font-medium">{item.label}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Sign out button at bottom */}
-          <div className="absolute bottom-6 left-4 right-4">
-            <button 
-              onClick={handleLogout}
-              className="w-full py-3 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors flex items-center justify-center font-medium"
-            >
-              {signOutIcon} Sign Out
-            </button>
           </div>
         </div>
       )}
 
-      {/* Mobile-friendly overlay */}
+      {/* Improved mobile overlay with modern blur effect */}
       {isSidebarOpen && (
         <div 
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 transition-opacity duration-300"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 transition-all duration-300"
           onClick={() => setSidebarOpen(false)}
         ></div>
       )}
@@ -401,7 +359,7 @@ const NavBar = () => {
 
       {/* BottomNavBar - Pass user object correctly */}
       <BottomNavBar 
-        user={user?.user}
+        user={actualUser}
       />
 
       {/* Add padding to the bottom to account for the bottom navigation */}

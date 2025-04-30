@@ -7,7 +7,10 @@ import {
   updateUser,
   getAllStudents,
   getAllSchoolCodes,
-  updateFaceData
+  updateFaceData,
+  forgotPassword,
+  verifyOTP,
+  resetPassword
 } from "../controllers/user.controllers.js";
 import { getTeachersBySchoolCode } from "../controllers/class.controllers.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
@@ -17,24 +20,25 @@ import Class from "../models/class.model.js";
 const router = Router();
 
 // Authentication routes
-router.post("/register",  registerUser);
+router.post("/register", registerUser);
 router.post("/login", login);
-router.get("/logout", logout);
+router.post("/logout", verifyJWT, logout);
 
-// Protected routes
-router.get("/profile/:id", getProfile);
-router.put("/update/:id", updateUser);
+// Password Reset routes
+router.post("/forgot-password", forgotPassword);
+router.post("/verify-otp", verifyOTP);
+router.post("/reset-password", resetPassword);
+
+// Profile routes
+router.get("/profile/:id", verifyJWT, getProfile);
+router.put("/update/:id", verifyJWT, updateUser);
+
+// Face data route
+router.post("/face-data", verifyJWT, updateFaceData);
 
 // Routes for students and teachers
 router.get("/students", getAllStudents);
-
-// Routes for school code
-router.get("/get-all-school-codes", getAllSchoolCodes);
-
-// Routes for face-data of user
-router.post("/face-data", updateFaceData);
-
-// Get teachers with same school code and their classes
-router.get('/teachers/school/:schoolCode', verifyJWT, getTeachersBySchoolCode);
+router.get("/school-codes", getAllSchoolCodes);
+router.get("/teachers/school/:schoolCode", verifyJWT, getTeachersBySchoolCode);
 
 export default router;

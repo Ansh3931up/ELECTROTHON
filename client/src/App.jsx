@@ -21,6 +21,7 @@ import StudentFindClasses from './pages/StudentFindClasses';
 import Teacher from './pages/Teacher';
 import TeacherHome from "./pages/TeacherHome";
 import TeacherTimetable from './pages/TeacherTimetable';
+import ForgotPassword from "./pages/ForgotPassword";
 
 const FaceCheckRoute = () => {
   // Use Redux state instead of localStorage directly
@@ -39,9 +40,9 @@ const FaceCheckRoute = () => {
   
   // If user is authenticated and face is verified, redirect to dashboard
   if (userRole === 'teacher') {
-    return <Navigate to="/teacher" replace />;
+    return <Navigate to="/teacher-home" replace />;
   } else if (userRole === 'student') {
-    return <Navigate to="/student" replace />;
+    return <Navigate to="/student-home" replace />;
   }
   
   // Fallback
@@ -129,6 +130,7 @@ function App() {
             <Route path="/check-signup" element={<SignupCheck />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
           </Route>
 
           {/* Face Registration Route (accessible only to authenticated users with unverified face) */}

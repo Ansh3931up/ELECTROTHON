@@ -61,7 +61,14 @@ const userSchema = new Schema(
       type: Boolean,
       default: false,
     },
-    
+    forgotPasswordToken: {
+      type: String,
+      default: null
+    },
+    forgotPasswordExpiry: {
+      type: Date,
+      default: null
+    },
   },
   {
     timestamps: true,
@@ -94,17 +101,37 @@ userSchema.methods = {
   },
 
   generatePasswordResetToken: async function () {
-    const resetToken = crypto.randomBytes(20).toString("hex");
-
-    this.forgotPasswordToken = crypto
-      .createHash("sha256")
-      .update(resetToken)
-      .digest("hex");
-
-    this.forgotPasswordExpiry = Date.now() + 15 * 60 * 1000;
-
-    return resetToken;
+    // Generate a 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    // Hash the OTP and store it
+    this.forgotPasswordToken = await bcrypt.hash(otp, 10);
+    this.forgotPasswordExpiry = Date.now() + 15 * 60 * 1000; // 15 minutes expiry
+    
+    await this.save();
+    return otp;
   },
+
+  verifyPasswordResetToken: async function (otp) {
+    if (!this.forgotPasswordToken || !this.forgotPasswordExpiry) {
+      return false;
+    }
+    
+    // Check if token has expired
+    if (Date.now() > this.forgotPasswordExpiry) {
+      return false;
+    }
+    
+    // Verify the OTP
+    return await bcrypt.compare(otp, this.forgotPasswordToken);
+  },
+
+  resetPassword: async function (newPassword) {
+    this.password = newPassword;
+    this.forgotPasswordToken = null;
+    this.forgotPasswordExpiry = null;
+    await this.save();
+  }
 };
 
 const User = model("User", userSchema);

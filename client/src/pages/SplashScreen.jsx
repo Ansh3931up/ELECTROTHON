@@ -1,64 +1,93 @@
+import { motion } from 'framer-motion';
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useTheme } from '../context/ThemeContext';
 import logo from '../assets/logo1112.png';
+
 const SplashScreen = () => {
   const navigate = useNavigate();
-  const { isDarkMode } = useTheme();
 
   useEffect(() => {
-    // Set a timeout to navigate to the signup check page after 3 seconds
-    const timer = setTimeout(() => {
+    // Check if user has seen splash screen before
+    const hasSeenSplash = localStorage.getItem('hasSeenSplash');
+    
+    if (hasSeenSplash) {
+      // If they've seen it before, navigate immediately
       navigate('/check-signup', { replace: true });
-    }, 3000); // 3 seconds
+    } else {
+      // If first time, show splash and set flag
+      const timer = setTimeout(() => {
+        localStorage.setItem('hasSeenSplash', 'true');
+        navigate('/check-signup', { replace: true });
+      }, 3000);
 
-    // Cleanup the timer if component unmounts
-    return () => clearTimeout(timer);
+      return () => clearTimeout(timer);
+    }
   }, [navigate]);
 
   return (
-    <div className={`min-h-screen flex flex-col items-center justify-center ${
-      isDarkMode ? 'bg-gray-900' : 'bg-gray-100'
-    } relative overflow-hidden`}>
-      {/* Background pattern dots */}
-      <div className="absolute top-0 left-0 w-full h-16 flex justify-end">
-        <div className="grid grid-cols-10 gap-2 p-4 opacity-20">
-          {[...Array(10)].map((_, i) => (
-            <div key={i} className="h-1 w-1 rounded-full bg-blue-500"></div>
-          ))}
-        </div>
-      </div>
-      
-      {/* Abstract shapes for background */}
-      <div className="absolute top-20 right-20 w-32 h-32 rounded-full bg-blue-800/20 blur-xl"></div>
-      <div className="absolute bottom-20 left-20 w-40 h-40 rounded-full bg-indigo-800/20 blur-xl"></div>
+    <div className={`min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-[#003B8E] via-[#0056B3] to-[#1A75FF] relative overflow-hidden`}>
+      {/* Animated background elements */}
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 0.1 }}
+        transition={{ duration: 1 }}
+        className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxwYXRoIGQ9Ik0zNiA4YzAgMi4yMS0xLjc5IDQtNCA0cy00LTEuNzktNC00IDEuNzktNCA0LTQgNCAxLjc5IDQgNHptMCA0OGMwIDIuMjEtMS43OSA0LTQgNHMtNC0xLjc5LTQtNCAxLjc5LTQgNC00IDQgMS43OSA0IDR6bTAtMjRjMCAyLjIxLTEuNzkgNC00IDRzLTQtMS43OS00LTQgMS43OS00IDQtNCA0IDEuNzkgNCA0eiIgZmlsbD0iI2ZmZiIvPjwvZz48L3N2Zz4=')]"
+      />
 
-      {/* Logo */}
-      <div className="bg-indigo-600 h-16 w-16 rounded-full flex items-center justify-center mb-8 shadow-lg">
-        <div className="bg-indigo-500 h-8 w-8 rounded-full">  <img src={logo} alt="Logo" className="w-full h-full object-contain" /></div>
-      </div>
+      {/* Floating circles */}
+      <motion.div
+        initial={{ y: 100, opacity: 0 }}
+        animate={{ y: 0, opacity: 0.2 }}
+        transition={{ duration: 1.5 }}
+        className="absolute top-20 right-20 w-32 h-32 rounded-full bg-white/20 blur-xl"
+      />
+      <motion.div
+        initial={{ y: -100, opacity: 0 }}
+        animate={{ y: 0, opacity: 0.2 }}
+        transition={{ duration: 1.5 }}
+        className="absolute bottom-20 left-20 w-40 h-40 rounded-full bg-white/20 blur-xl"
+      />
+
+      {/* Logo container */}
+      <motion.div
+        initial={{ scale: 0.8, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ duration: 0.5 }}
+        className="bg-white/10 backdrop-blur-sm h-20 w-20 rounded-2xl flex items-center justify-center mb-8 shadow-lg p-2"
+      >
+        <img src={logo} alt="Logo" className="w-full h-full object-contain" />
+      </motion.div>
       
       {/* Content */}
-      <div className="z-10 text-center px-6">
-        <h1 className={`text-5xl font-bold mb-3 ${
-          isDarkMode ? 'text-white' : 'text-gray-800'
-        }`}>
-          Neura<span className='text-sky-400'>Campus</span>
+      <motion.div
+        initial={{ y: 20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.5, delay: 0.2 }}
+        className="z-10 text-center px-6"
+      >
+        <h1 className="text-5xl font-bold mb-3 text-white">
+          Neura<span className="text-sky-300">Campus</span>
         </h1>
-        <p className={`text-xl mb-10 ${
-          isDarkMode ? 'text-gray-300' : 'text-gray-600'
-        }`}>
+        <p className="text-xl mb-10 text-white/80">
           Connecting teachers and students
         </p>
         
-        {/* Animated spinner */}
-        <div className="animate-spin rounded-full h-12 w-12 border-t-3 border-b-3 border-indigo-500 mx-auto"></div>
-      </div>
+        {/* Animated loading spinner */}
+        <motion.div
+          initial={{ rotate: 0 }}
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+          className="rounded-full h-12 w-12 border-4 border-white/30 border-t-white mx-auto"
+        />
+      </motion.div>
       
-      {/* Bottom pattern */}
-      <div className="absolute bottom-0 right-0 w-full h-24 opacity-10">
-        <div className="h-full w-full bg-gradient-to-tr from-indigo-800 to-transparent"></div>
-      </div>
+      {/* Bottom gradient */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 0.1 }}
+        transition={{ duration: 1 }}
+        className="absolute bottom-0 left-0 w-full h-32 bg-gradient-to-t from-black/20 to-transparent"
+      />
     </div>
   );
 };

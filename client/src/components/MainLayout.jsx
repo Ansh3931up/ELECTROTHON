@@ -3,6 +3,7 @@ import { useSelector } from 'react-redux';
 import { useTheme } from '../context/ThemeContext';
 import BottomNavBar from './BottomNavBar';
 import NavBar from './NavBar';
+import { useEffect } from 'react';
 
 /**
  * MainLayout Component
@@ -10,15 +11,19 @@ import NavBar from './NavBar';
  * based on authentication status
  */
 const MainLayout = () => {
-  // Get authentication state from Redux store
-  const { user, isAuthenticated } = useSelector((state) => state.auth);
   const { isDarkMode } = useTheme();
+  const { user, isAuthenticated } = useSelector((state) => state.auth);
 
-  // Extract actual user data (if exists)
+  // Get the actual user data
   const actualUser = user?.user;
   
-  // Determine if navigation components should be displayed
+  // Determine if navigation should be shown - check both authentication and user data
   const showNavigation = isAuthenticated && actualUser;
+
+  // Debug logs
+  useEffect(() => {
+    console.log('Auth State:', { isAuthenticated, user: actualUser });
+  }, [isAuthenticated, actualUser]);
 
   return (
     <div className={`relative min-h-screen ${isDarkMode ? 'bg-gray-900/50' : 'bg-gray-50/10'}`}>
@@ -40,15 +45,15 @@ const MainLayout = () => {
         <div className={`absolute inset-0 ${isDarkMode ? 'bg-[url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2220%22 height=%2220%22 viewBox=%220 0 20 20%22%3E%3Cg fill=%22%233B82F6%22 fill-opacity=%220.03%22%3E%3Cpath d=%22M0 0h4v4H0V0zm0 8h4v4H0V8zm8 0h4v4H8V8zm8 0h4v4h-4V8zm-8-8h4v4H8V0zm8 0h4v4h-4V0zm0 16h4v4h-4v-4zm-8 0h4v4H8v-4zM0 16h4v4H0v-4z%22/%3E%3C/g%3E%3C/svg%3E")]' : 'bg-[url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2220%22 height=%2220%22 viewBox=%220 0 20 20%22%3E%3Cg fill=%22%233B82F6%22 fill-opacity=%220.02%22%3E%3Cpath d=%22M0 0h4v4H0V0zm0 8h4v4H0V8zm8 0h4v4H8V8zm8 0h4v4h-4V8zm-8-8h4v4H8V0zm8 0h4v4h-4V0zm0 16h4v4h-4v-4zm-8 0h4v4H8v-4zM0 16h4v4H0v-4z%22/%3E%3C/g%3E%3C/svg%3E")]'}`}></div>
       </div>
     
-      {/* Render NavBar only if user is authenticated */}
+      {/* Always render NavBar when authenticated */}
       {showNavigation && <NavBar />}
 
-      {/* Main content area with conditional padding */}
+      {/* Main content area */}
       <main className={`relative z-10 ${showNavigation ? 'pb-16' : 'pt-0 pb-0'}`}>
         <Outlet />
       </main>
 
-      {/* Render BottomNavBar only if user is authenticated */}
+      {/* Always render BottomNavBar when authenticated */}
       {showNavigation && <BottomNavBar user={actualUser} />}
     </div>
   );

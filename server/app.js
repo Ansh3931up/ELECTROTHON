@@ -50,7 +50,7 @@ app.use("/ping", function (req, res) {
 
 app.use("/api/v1/user", userRoutes);
 app.use("/api/v1/class", classRoutes);
-// app.use("/api/v1/student", studentRoutes);
+
 
 app.all("*", (req, res) => {
   res.status(404).send("OOPS! 404 PAGE NOT FOUND");

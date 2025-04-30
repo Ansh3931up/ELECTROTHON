@@ -1,10 +1,19 @@
 import { useState } from "react";
 import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from "react-redux";
-import { FiEye, FiEyeOff, FiArrowRight, FiUser, FiMail, FiPhone, FiLock, FiBookmark } from 'react-icons/fi';
+import { motion } from 'framer-motion';
+import { 
+  HiOutlineUser, 
+  HiOutlineMail, 
+  HiOutlinePhone, 
+  HiOutlineLockClosed, 
+  HiOutlineAcademicCap,
+  HiOutlineEye, 
+  HiOutlineEyeOff
+} from 'react-icons/hi';
 import { signupUser } from "../redux/slices/authSlice";
 import { useTheme } from '../context/ThemeContext';
-import { motion } from 'framer-motion';
+import logo from '../assets/logo1112.png';
 
 const Signup = () => {
   const dispatch = useDispatch();
@@ -36,49 +45,71 @@ const Signup = () => {
     let errors = { ...validationErrors };
     
     switch(name) {
-      case 'fullName':
+      case 'fullName': {
         if (!value || value.trim() === '') {
           errors.fullName = 'Full name is required';
         } else if (value.length < 3) {
           errors.fullName = 'Name must be at least 3 characters';
+        } else if (!/^[a-zA-Z\s]*$/.test(value)) {
+          errors.fullName = 'Name should only contain letters and spaces';
+        } else if (value.length > 50) {
+          errors.fullName = 'Name should not exceed 50 characters';
         } else {
           delete errors.fullName;
         }
         break;
-      case 'email':
-        if (!value || !value.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
-          errors.email = 'Valid email is required';
+      }
+
+      case 'email': {
+        const emailRegex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}$/;
+        if (!value) {
+          errors.email = 'Email is required';
+        } else if (!emailRegex.test(value)) {
+          errors.email = 'Please enter a valid email address';
         } else {
           delete errors.email;
         }
         break;
-      case 'phone':
-        if (!value || value.trim() === '') {
+      }
+
+      case 'phone': {
+        const indianPhoneRegex = /^[6-9]\d{9}$/;
+        if (!value) {
           errors.phone = 'Phone number is required';
-        } else if (!value.match(/^\d{10}$/)) {
-          errors.phone = 'Enter a valid 10-digit phone number';
+        } else if (!indianPhoneRegex.test(value)) {
+          errors.phone = 'Please enter a valid Indian mobile number';
         } else {
           delete errors.phone;
         }
         break;
-      case 'password':
+      }
+
+      case 'password': {
+        const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
         if (!value) {
           errors.password = 'Password is required';
-        } else if (value.length < 6) {
-          errors.password = 'Password must be at least 6 characters';
-        } else if (!value.match(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{6,}$/)) {
-          errors.password = 'Password must contain uppercase, lowercase and numbers';
+        } else if (value.length < 8) {
+          errors.password = 'Password must be at least 8 characters';
+        } else if (!passwordRegex.test(value)) {
+          errors.password = 'Password must contain: uppercase, lowercase, number, special character';
         } else {
           delete errors.password;
         }
         break;
-      case 'schoolCode':
-        if (!value || value.trim() === '') {
+      }
+
+      case 'schoolCode': {
+        const schoolCodeRegex = /^[A-Z0-9]{4,10}$/;
+        if (!value) {
           errors.schoolCode = 'School code is required';
+        } else if (!schoolCodeRegex.test(value)) {
+          errors.schoolCode = 'Enter a valid school code (4-10 alphanumeric characters)';
         } else {
           delete errors.schoolCode;
         }
         break;
+      }
+
       default:
         break;
     }
@@ -142,276 +173,221 @@ const Signup = () => {
     }`;
   };
 
-  return (
-    <div className={`min-h-screen pb-20 ${isDarkMode ? 'bg-gray-900' : 'bg-gray-50'} relative overflow-hidden`}>
-      {/* Gradient background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-indigo-100 to-transparent opacity-10 pointer-events-none"></div>
-      <div className="absolute -top-20 -right-20 w-72 h-72 rounded-full bg-indigo-500 opacity-10 blur-3xl"></div>
-      <div className="absolute bottom-0 left-0 w-72 h-72 rounded-full bg-purple-500 opacity-10 blur-3xl"></div>
-      
-      {/* Main container */}
-      <div className="max-w-md mx-auto px-6 py-12 h-full flex flex-col">
-        {/* Logo */}
-        <motion.div 
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="mt-8 mb-10"
-        >
-          <div className="bg-gradient-to-r from-indigo-600 to-purple-600 h-14 w-14 rounded-xl flex items-center justify-center shadow-lg">
-            <div className="bg-white h-7 w-7 rounded-md opacity-90"></div>
-          </div>
-        </motion.div>
+  // Input field configuration with enhanced icons and validation
+  const inputFields = [
+    {
+      name: 'fullName',
+      icon: HiOutlineUser,
+      placeholder: 'Full Name',
+      type: 'text',
+      autoComplete: 'name',
+      maxLength: 50
+    },
+    {
+      name: 'email',
+      icon: HiOutlineMail,
+      placeholder: 'Email Address',
+      type: 'email',
+      autoComplete: 'email'
+    },
+    {
+      name: 'phone',
+      icon: HiOutlinePhone,
+      placeholder: 'Mobile Number (Indian)',
+      type: 'tel',
+      autoComplete: 'tel',
+      maxLength: 10,
+      pattern: '[6-9]{1}[0-9]{9}'
+    },
+    {
+      name: 'schoolCode',
+      icon: HiOutlineAcademicCap,
+      placeholder: 'School/College Code',
+      type: 'text',
+      autoComplete: 'off',
+      maxLength: 10
+    }
+  ];
 
-        {/* Content */}
-        <motion.div 
+  return (
+    <div className="h-screen flex flex-col overflow-hidden bg-gradient-to-br from-[#003B8E] via-[#0056B3] to-[#1A75FF]">
+      {/* Header Section - 1/7th height */}
+      <div className="h-[14.285vh] flex items-center justify-center">
+        <div className="text-center">
+          <img 
+            src={logo} 
+            alt="Logo" 
+            className="w-12 h-12 mx-auto rounded-xl bg-white/5 p-2 shadow-lg"
+          />
+        </div>
+      </div>
+
+      {/* Main Content - Floating Card */}
+      <div className="flex-1">
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.1 }}
-          className="flex-1"
+          transition={{ duration: 0.5 }}
+          className="h-full"
         >
-          <h1 className={`text-3xl font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-            Create Account
-          </h1>
-          <p className={`text-sm mb-8 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-            Please enter your information to create your account
-          </p>
-          
-          {/* Display API errors */}
-          {signupApiError && !submitSuccess && (
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className={`p-4 rounded-lg mb-6 flex items-center ${
-                isDarkMode ? 'bg-red-900/50 text-red-200' : 'bg-red-100 text-red-700'
-              }`}
-            >
-              <div className="mr-3">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div>{signupApiError}</div>
-            </motion.div>
-          )}
+          <div className="text-center text-white py-2">
+            <h2 className="text-2xl font-bold text-white/95">
+              Create Account
+            </h2>
+            <p className="text-white/80 text-sm">
+              Enter your details to register
+            </p>
+          </div>
 
-          {/* Display success message */}
-          {submitSuccess && (
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className={`p-4 rounded-lg mb-6 flex items-center ${
-                isDarkMode ? 'bg-green-900/50 text-green-200' : 'bg-green-100 text-green-700'
-              }`}
-            >
-              <div className="mr-3">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div>Account created successfully! Redirecting to login...</div>
-            </motion.div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Full Name input */}
-            <div className="relative">
-              <div className={`absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none ${
-                validationErrors.fullName && focused.fullName !== true ? 'text-red-500' : 'text-indigo-500'
-              }`}>
-                <FiUser size={20} />
-              </div>
-              <input
-                type="text"
-                name="fullName"
-                value={formData.fullName}
-                onChange={handleChange}
-                onFocus={() => handleFocus('fullName')}
-                onBlur={() => handleBlur('fullName')}
-                placeholder="Full Name"
-                className={getInputClassName('fullName')}
-              />
-              {validationErrors.fullName && focused.fullName !== true && (
-                <p className="text-xs mt-1.5 ml-1 text-red-500 font-medium">
-                  {validationErrors.fullName}
-                </p>
-              )}
-            </div>
-            
-            {/* Email input */}
-            <div className="relative">
-              <div className={`absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none ${
-                validationErrors.email && focused.email !== true ? 'text-red-500' : 'text-indigo-500'
-              }`}>
-                <FiMail size={20} />
-              </div>
-              <input
-                type="email"
-                name="email"
-                value={formData.email}
-                onChange={handleChange}
-                onFocus={() => handleFocus('email')}
-                onBlur={() => handleBlur('email')}
-                placeholder="Email"
-                className={getInputClassName('email')}
-              />
-              {validationErrors.email && focused.email !== true && (
-                <p className="text-xs mt-1.5 ml-1 text-red-500 font-medium">
-                  {validationErrors.email}
-                </p>
-              )}
-            </div>
-            
-            {/* Phone input */}
-            <div className="relative">
-              <div className={`absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none ${
-                validationErrors.phone && focused.phone !== true ? 'text-red-500' : 'text-indigo-500'
-              }`}>
-                <FiPhone size={20} />
-              </div>
-              <input
-                type="tel"
-                name="phone"
-                value={formData.phone}
-                onChange={handleChange}
-                onFocus={() => handleFocus('phone')}
-                onBlur={() => handleBlur('phone')}
-                placeholder="Phone Number (10 digits)"
-                className={getInputClassName('phone')}
-              />
-              {validationErrors.phone && focused.phone !== true && (
-                <p className="text-xs mt-1.5 ml-1 text-red-500 font-medium">
-                  {validationErrors.phone}
-                </p>
-              )}
-            </div>
-            
-            {/* School Code input */}
-            <div className="relative">
-              <div className={`absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none ${
-                validationErrors.schoolCode && focused.schoolCode !== true ? 'text-red-500' : 'text-indigo-500'
-              }`}>
-                <FiBookmark size={20} />
-              </div>
-              <input
-                type="text"
-                name="schoolCode"
-                value={formData.schoolCode}
-                onChange={handleChange}
-                onFocus={() => handleFocus('schoolCode')}
-                onBlur={() => handleBlur('schoolCode')}
-                placeholder="School/College Code"
-                className={getInputClassName('schoolCode')}
-              />
-              {validationErrors.schoolCode && focused.schoolCode !== true && (
-                <p className="text-xs mt-1.5 ml-1 text-red-500 font-medium">
-                  {validationErrors.schoolCode}
-                </p>
-              )}
-            </div>
-            
-            {/* Password input */}
-            <div className="relative">
-              <div className={`absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none ${
-                validationErrors.password && focused.password !== true ? 'text-red-500' : 'text-indigo-500'
-              }`}>
-                <FiLock size={20} />
-              </div>
-              <input
-                type={showPassword ? "text" : "password"}
-                name="password"
-                value={formData.password}
-                onChange={handleChange}
-                onFocus={() => handleFocus('password')}
-                onBlur={() => handleBlur('password')}
-                placeholder="Password"
-                className={getInputClassName('password')}
-              />
-              <div 
-                className={`absolute inset-y-0 right-0 pr-3 flex items-center cursor-pointer ${
-                  validationErrors.password && focused.password !== true ? 'text-red-500' : 'text-gray-500'
-                }`}
-                onClick={() => setShowPassword(!showPassword)}
+          <div className={`${
+            isDarkMode ? 'bg-gray-800/95' : 'bg-white/95'
+          } backdrop-blur-sm rounded-t-[32px] shadow-xl p-6 h-[calc(100vh-14.285vh-80px)] mt-2 overflow-y-auto`}>
+            {signupApiError && (
+              <motion.div 
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-4 rounded-xl mb-6 bg-red-50 border border-red-100 text-red-700"
               >
-                {showPassword ? <FiEyeOff size={20} /> : <FiEye size={20} />}
-              </div>
-              {validationErrors.password && focused.password !== true && (
-                <p className="text-xs mt-1.5 ml-1 text-red-500 font-medium">
-                  {validationErrors.password}
-                </p>
-              )}
-            </div>
-            
-            {/* Role selection */}
-            <div className="mt-2">
-              <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                Select Role
-              </label>
-              <div className={`flex rounded-lg overflow-hidden shadow-sm ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}>
-                <label 
-                  className={`flex-1 py-3.5 px-4 text-center cursor-pointer transition-all duration-200 ${
-                    formData.role === 'student' 
-                      ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white font-medium shadow-lg' 
-                      : isDarkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'
-                  }`}
-                >
-                  <input 
-                    type="radio" 
-                    name="role" 
-                    value="student" 
-                    checked={formData.role === 'student'} 
-                    onChange={handleChange} 
-                    className="sr-only"
-                  />
-                  Student
-                </label>
-                <label 
-                  className={`flex-1 py-3.5 px-4 text-center cursor-pointer transition-all duration-200 ${
-                    formData.role === 'teacher' 
-                      ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white font-medium shadow-lg' 
-                      : isDarkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="role"
-                    value="teacher" 
-                    checked={formData.role === 'teacher'} 
-                    onChange={handleChange}
-                    className="sr-only"
-                  />
-                  Teacher
-                </label>
-              </div>
-            </div>
+                <div className="font-medium">{signupApiError}</div>
+              </motion.div>
+            )}
 
-            {/* Create button */}
-            <motion.div 
-              className="relative mt-8"
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.99 }}
-            >
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {inputFields.map((field) => (
+                <div key={field.name} className="relative">
+                  <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-gray-400">
+                    <field.icon className="w-5 h-5" />
+                  </div>
+                  <input
+                    type={field.type}
+                    name={field.name}
+                    value={formData[field.name]}
+                    onChange={handleChange}
+                    onFocus={() => handleFocus(field.name)}
+                    onBlur={() => handleBlur(field.name)}
+                    placeholder={field.placeholder}
+                    autoComplete={field.autoComplete}
+                    maxLength={field.maxLength}
+                    pattern={field.pattern}
+                    className={`w-full pl-12 pr-4 py-3 rounded-xl ${
+                      isDarkMode 
+                        ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-[#8B85FF] focus:ring-1 focus:ring-[#8B85FF]' 
+                        : 'bg-gray-100 border border-gray-300 focus:border-[#6C63FF] focus:ring-1 focus:ring-[#6C63FF]'
+                    } transition-colors`}
+                  />
+                  {validationErrors[field.name] && !focused[field.name] && (
+                    <p className="text-xs mt-1 text-red-500">
+                      {validationErrors[field.name]}
+                    </p>
+                  )}
+                </div>
+              ))}
+
+              {/* Password Input */}
+              <div className="relative">
+                <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-gray-400">
+                  <HiOutlineLockClosed className="w-5 h-5" />
+                </div>
+                <input
+                  type={showPassword ? "text" : "password"}
+                  name="password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  onFocus={() => handleFocus('password')}
+                  onBlur={() => handleBlur('password')}
+                  placeholder="Password"
+                  className={`w-full pl-12 pr-12 py-3 rounded-xl ${
+                    isDarkMode 
+                      ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-[#8B85FF] focus:ring-1 focus:ring-[#8B85FF]' 
+                      : 'bg-gray-100 border border-gray-300 focus:border-[#6C63FF] focus:ring-1 focus:ring-[#6C63FF]'
+                  } transition-colors`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-4 flex items-center"
+                >
+                  {showPassword ? (
+                    <HiOutlineEyeOff className="w-5 h-5 text-gray-400" />
+                  ) : (
+                    <HiOutlineEye className="w-5 h-5 text-gray-400" />
+                  )}
+                </button>
+                {validationErrors.password && !focused.password && (
+                  <p className="text-xs mt-1 text-red-500">
+                    {validationErrors.password}
+                  </p>
+                )}
+              </div>
+
+              {/* Role Selection */}
+              <div className="flex space-x-4">
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, role: 'student' })}
+                  className={`flex-1 py-3 px-4 rounded-xl border transition-colors ${
+                    formData.role === 'student'
+                      ? 'bg-[#003B8E] text-white border-transparent'
+                      : isDarkMode
+                        ? 'border-gray-600 text-gray-300 hover:border-[#0056B3]'
+                        : 'border-gray-300 text-gray-600 hover:border-[#003B8E]'
+                  }`}
+                >
+                  Student
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, role: 'teacher' })}
+                  className={`flex-1 py-3 px-4 rounded-xl border transition-colors ${
+                    formData.role === 'teacher'
+                      ? 'bg-[#003B8E] text-white border-transparent'
+                      : isDarkMode
+                        ? 'border-gray-600 text-gray-300 hover:border-[#0056B3]'
+                        : 'border-gray-300 text-gray-600 hover:border-[#003B8E]'
+                  }`}
+                >
+                  Teacher
+                </button>
+              </div>
+
               <button
                 type="submit"
                 disabled={signupLoading}
-                className={`w-full bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white py-3.5 px-6 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 shadow-md transition-all duration-200 ${
-                  signupLoading ? 'opacity-70 cursor-not-allowed' : ''
-                }`}
+                className={`w-full py-3 px-4 rounded-xl ${
+                  isDarkMode
+                    ? 'bg-gradient-to-r from-[#003B8E] to-[#0056B3] hover:from-[#00337A] hover:to-[#004799]'
+                    : 'bg-gradient-to-r from-[#003B8E] to-[#0056B3] hover:from-[#00337A] hover:to-[#004799]'
+                } text-white font-medium transition-colors disabled:opacity-70`}
               >
                 {signupLoading ? 'Creating Account...' : 'Create Account'}
-                <FiArrowRight size={20} className="absolute right-5 top-1/2 transform -translate-y-1/2 text-white" />
               </button>
-            </motion.div>
-          </form>
+            </form>
 
-          {/* Login link */}
-          <div className="mt-8 text-center">
-            <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-              Already have an account?
-            </p>
-            <Link to="/login" className={`mt-1 inline-block font-medium text-indigo-600 hover:text-indigo-500 transition-colors duration-200`}>
-              Login to your account
-            </Link>
+            <div className="mt-6 text-center">
+              <span className={isDarkMode ? 'text-gray-400' : 'text-gray-600'}>
+                Already have an account?{' '}
+              </span>
+              <Link
+                to="/login"
+                className={`font-medium transition-colors ${
+                  isDarkMode 
+                    ? 'text-[#1A75FF] hover:text-[#4D94FF]' 
+                    : 'text-[#003B8E] hover:text-[#0056B3]'
+                }`}
+              >
+                Sign In
+              </Link>
+            </div>
+
+            {submitSuccess && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-4 p-4 rounded-xl bg-green-50 border border-green-100 text-green-700 text-center"
+              >
+                <p className="font-medium">Account created successfully! Redirecting to login...</p>
+              </motion.div>
+            )}
           </div>
         </motion.div>
       </div>

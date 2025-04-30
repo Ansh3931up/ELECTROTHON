@@ -5,6 +5,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { motion } from 'framer-motion';
 import { loginUser } from '../redux/slices/authSlice';
 import { useTheme } from '../context/ThemeContext';
+import logo from '../assets/logo1112.png';
 
 const Login = () => {
   const { isDarkMode } = useTheme();
@@ -112,7 +113,7 @@ const Login = () => {
           navigate('/face-registration');
         } else {
           // Face is already verified, navigate based on role
-          navigate(formData.role === 'teacher' ? '/teacher' : '/student');
+          navigate(formData.role === 'teacher' ? '/teacher-home' : '/student-home');
         }
       }
     } catch (err) {
@@ -121,194 +122,172 @@ const Login = () => {
   };
 
   return (
-    <div className={`min-h-screen pb-20 ${isDarkMode ? 'bg-gray-900' : 'bg-gray-50'} relative overflow-hidden`}>
-      {/* Gradient background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-indigo-100 to-transparent opacity-10 pointer-events-none"></div>
-      <div className="absolute -top-20 -right-20 w-72 h-72 rounded-full bg-indigo-500 opacity-10 blur-3xl"></div>
-      <div className="absolute bottom-0 left-0 w-72 h-72 rounded-full bg-purple-500 opacity-10 blur-3xl"></div>
-      
-      {/* Main container */}
-      <div className="max-w-md mx-auto px-6 py-12 h-full flex flex-col">
-        {/* Logo */}
-        <motion.div 
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="mt-8 mb-10"
-        >
-          <div className="bg-gradient-to-r from-indigo-600 to-purple-600 h-14 w-14 rounded-xl flex items-center justify-center shadow-lg">
-            <div className="bg-white h-7 w-7 rounded-md opacity-90"></div>
-          </div>
-        </motion.div>
-        
-        {/* Content */}
-        <motion.div 
+    <div className="h-screen flex flex-col overflow-hidden bg-gradient-to-br from-[#003B8E] via-[#0056B3] to-[#1A75FF]">
+      {/* Header Section - 1/7th height */}
+      <div className="h-[14.285vh] flex items-center justify-center">
+        <div className="text-center">
+          <img 
+            src={logo} 
+            alt="Logo" 
+            className="w-12 h-12 mx-auto rounded-xl bg-white/5 p-2 shadow-lg"
+          />
+        </div>
+      </div>
+
+      {/* Main Content - Floating Card */}
+      <div className="flex-1">
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.1 }}
-          className="flex-1"
+          transition={{ duration: 0.5 }}
+          className="h-full"
         >
-          <h1 className={`text-3xl font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-            Welcome Back!
-          </h1>
-          <p className={`text-sm mb-8 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-            Enter your credentials to access your account
-          </p>
-          
-          {/* Display error message if login fails */}
-          {error && (
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className={`p-4 rounded-lg mb-6 flex items-center ${
-                isDarkMode ? 'bg-red-900/50 text-red-200' : 'bg-red-100 text-red-700'
-              }`}
-            >
-              <div className="mr-3">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div>{error}</div>
-            </motion.div>
-          )}
-          
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Email input */}
-            <div className="relative">
-              <div className={`absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none ${
-                validationErrors.email && focused.email !== true ? 'text-red-500' : 'text-indigo-500'
-              }`}>
-                <FiMail size={20} />
-              </div>
-              <input
-                type="email"
-                name="email"
-                value={formData.email}
-                onChange={handleChange}
-                onFocus={() => handleFocus('email')}
-                onBlur={() => handleBlur('email')}
-                placeholder="Email"
-                required
-                className={getInputClassName('email')}
-              />
-              {validationErrors.email && focused.email !== true && (
-                <p className="text-xs mt-1.5 ml-1 text-red-500 font-medium">
-                  {validationErrors.email}
-                </p>
-              )}
-            </div>
-            
-            {/* Password input */}
-            <div className="relative">
-              <div className={`absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none ${
-                validationErrors.password && focused.password !== true ? 'text-red-500' : 'text-indigo-500'
-              }`}>
-                <FiLock size={20} />
-              </div>
-              <input
-                type={showPassword ? "text" : "password"}
-                name="password"
-                value={formData.password}
-                onChange={handleChange}
-                onFocus={() => handleFocus('password')}
-                onBlur={() => handleBlur('password')}
-                placeholder="Password"
-                required
-                className={getInputClassName('password')}
-              />
-              <div 
-                className={`absolute inset-y-0 right-0 pr-3 flex items-center cursor-pointer ${
-                  validationErrors.password && focused.password !== true ? 'text-red-500' : 'text-gray-500'
-                }`}
-                onClick={() => setShowPassword(!showPassword)}
+          <div className="text-center text-white py-2">
+            <h2 className="text-2xl font-bold text-white/95">
+              Welcome Back!
+            </h2>
+            <p className="text-white/80 text-sm">
+              Enter your credentials to access your account
+            </p>
+          </div>
+
+          <div className={`${
+            isDarkMode ? 'bg-gray-800/95' : 'bg-white/95'
+          } backdrop-blur-sm rounded-t-[32px] shadow-xl p-6 h-[calc(100vh-14.285vh-80px)] mt-2`}>
+            {error && (
+              <motion.div 
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-4 rounded-xl mb-6 bg-red-50 border border-red-100 text-red-700"
               >
-                {showPassword ? <FiEyeOff size={20} /> : <FiEye size={20} />}
+                <div className="font-medium">{error}</div>
+              </motion.div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Email Input */}
+              <div className="relative">
+                <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-gray-400">
+                  <FiMail className="w-5 h-5" />
+                </div>
+                <input
+                  type="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  onFocus={() => handleFocus('email')}
+                  onBlur={() => handleBlur('email')}
+                  placeholder="Email"
+                  className={`w-full pl-12 pr-4 py-3 rounded-xl ${
+                    isDarkMode 
+                      ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-[#8B85FF] focus:ring-1 focus:ring-[#8B85FF]' 
+                      : 'bg-gray-100 border border-gray-300 focus:border-[#6C63FF] focus:ring-1 focus:ring-[#6C63FF]'
+                  } transition-colors`}
+                />
               </div>
-              {validationErrors.password && focused.password !== true && (
-                <p className="text-xs mt-1.5 ml-1 text-red-500 font-medium">
-                  {validationErrors.password}
-                </p>
-              )}
-            </div>
-            
-            {/* Role selection */}
-            <div className="mt-2">
-              <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                Select Role
-              </label>
-              <div className={`flex rounded-lg overflow-hidden shadow-sm ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}>
-                <label 
-                  className={`flex-1 py-3.5 px-4 text-center cursor-pointer transition-all duration-200 ${
-                    formData.role === 'student' 
-                      ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white font-medium shadow-lg' 
-                      : isDarkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'
+
+              {/* Password Input */}
+              <div className="relative">
+                <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-gray-400">
+                  <FiLock className="w-5 h-5" />
+                </div>
+                <input
+                  type={showPassword ? "text" : "password"}
+                  name="password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  onFocus={() => handleFocus('password')}
+                  onBlur={() => handleBlur('password')}
+                  placeholder="Password"
+                  className={`w-full pl-12 pr-12 py-3 rounded-xl ${
+                    isDarkMode 
+                      ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-[#8B85FF] focus:ring-1 focus:ring-[#8B85FF]' 
+                      : 'bg-gray-100 border border-gray-300 focus:border-[#6C63FF] focus:ring-1 focus:ring-[#6C63FF]'
+                  } transition-colors`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-4 flex items-center"
+                >
+                  {showPassword ? (
+                    <FiEyeOff className="w-5 h-5 text-gray-400" />
+                  ) : (
+                    <FiEye className="w-5 h-5 text-gray-400" />
+                  )}
+                </button>
+              </div>
+
+              {/* Role Selection */}
+              <div className="flex space-x-4">
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, role: 'student' })}
+                  className={`flex-1 py-3 px-4 rounded-xl border transition-colors ${
+                    formData.role === 'student'
+                      ? 'bg-[#003B8E] text-white border-transparent'
+                      : isDarkMode
+                        ? 'border-gray-600 text-gray-300 hover:border-[#0056B3]'
+                        : 'border-gray-300 text-gray-600 hover:border-[#003B8E]'
                   }`}
                 >
-                  <input 
-                    type="radio" 
-                    name="role" 
-                    value="student" 
-                    checked={formData.role === 'student'} 
-                    onChange={handleChange} 
-                    className="sr-only"
-                  />
                   Student
-                </label>
-                <label 
-                  className={`flex-1 py-3.5 px-4 text-center cursor-pointer transition-all duration-200 ${
-                    formData.role === 'teacher' 
-                      ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white font-medium shadow-lg' 
-                      : isDarkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, role: 'teacher' })}
+                  className={`flex-1 py-3 px-4 rounded-xl border transition-colors ${
+                    formData.role === 'teacher'
+                      ? 'bg-[#003B8E] text-white border-transparent'
+                      : isDarkMode
+                        ? 'border-gray-600 text-gray-300 hover:border-[#0056B3]'
+                        : 'border-gray-300 text-gray-600 hover:border-[#003B8E]'
                   }`}
                 >
-                  <input 
-                    type="radio" 
-                    name="role" 
-                    value="teacher" 
-                    checked={formData.role === 'teacher'} 
-                    onChange={handleChange} 
-                    className="sr-only"
-                  />
                   Teacher
-                </label>
+                </button>
               </div>
-            </div>
-            
-            {/* Forgot password */}
-            <div className="flex justify-end mt-1">
-              <Link to="/forgot-password" className={`text-sm font-medium text-indigo-600 hover:text-indigo-500 transition-colors duration-200`}>
-                Forgot password?
-              </Link>
-            </div>
-            
-            {/* Login button */}
-            <motion.div 
-              className="relative mt-8"
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.99 }}
-            >
+
               <button
                 type="submit"
                 disabled={loading}
-                className={`w-full bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white py-3.5 px-6 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 shadow-md transition-all duration-200 ${
-                  loading ? 'opacity-70 cursor-not-allowed' : ''
+                className={`w-full py-3 px-4 rounded-xl ${
+                  isDarkMode
+                    ? 'bg-gradient-to-r from-[#003B8E] to-[#0056B3] hover:from-[#00337A] hover:to-[#004799]'
+                    : 'bg-gradient-to-r from-[#003B8E] to-[#0056B3] hover:from-[#00337A] hover:to-[#004799]'
+                } text-white font-medium transition-colors disabled:opacity-70`}
+              >
+                {loading ? 'Signing in...' : 'Sign In'}
+              </button>
+            </form>
+
+            <div className="mt-6 text-center">
+              <Link
+                to="/forgot-password"
+                className={`font-medium transition-colors ${
+                  isDarkMode 
+                    ? 'text-[#1A75FF] hover:text-[#4D94FF]' 
+                    : 'text-[#003B8E] hover:text-[#0056B3]'
                 }`}
               >
-                {loading ? 'Logging in...' : 'Login'}
-                <FiArrowRight size={20} className="absolute right-5 top-1/2 transform -translate-y-1/2 text-white" />
-              </button>
-            </motion.div>
-          </form>
-          
-          {/* Create account link */}
-          <div className="mt-8 text-center">
-            <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-              Don&apos;t have an account?
-            </p>
-            <Link to="/signup" className={`mt-1 inline-block font-medium text-indigo-600 hover:text-indigo-500 transition-colors duration-200`}>
-              Create account
-            </Link>
+                Forgot Password?
+              </Link>
+              <div className="mt-2">
+                <span className={isDarkMode ? 'text-gray-400' : 'text-gray-600'}>
+                  Don't have an account?{' '}
+                </span>
+                <Link
+                  to="/signup"
+                  className={`font-medium transition-colors ${
+                    isDarkMode 
+                      ? 'text-[#1A75FF] hover:text-[#4D94FF]' 
+                      : 'text-[#003B8E] hover:text-[#0056B3]'
+                  }`}
+                >
+                  Sign Up
+                </Link>
+              </div>
+            </div>
           </div>
         </motion.div>
       </div>
