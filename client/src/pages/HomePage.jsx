@@ -1,12 +1,13 @@
+import 'slick-carousel/slick/slick.css';
+import 'slick-carousel/slick/slick-theme.css';
+
 import { motion } from 'framer-motion';
 import PropTypes from 'prop-types';
 import { useEffect, useState } from 'react';
-import { FiBarChart2, FiBell, FiBook, FiCalendar, FiClock, FiMoon, FiSun, FiTrendingUp, FiUsers } from 'react-icons/fi';
+import { FiBarChart2,  FiBook, FiCalendar, FiClock,  FiTrendingUp, FiUsers } from 'react-icons/fi';
 import { useDispatch, useSelector } from 'react-redux';
-import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import Slider from 'react-slick';
-import 'slick-carousel/slick/slick.css';
-import 'slick-carousel/slick/slick-theme.css';
+import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 import BottomNavBar from '../components/BottomNavBar';
 import { useTheme } from '../context/ThemeContext';
@@ -318,7 +319,7 @@ const AdvertisementCarousel = () => {
 
 const HomePage = () => {
   const dispatch = useDispatch();
-  const { isDarkMode, toggleTheme } = useTheme();
+  const { isDarkMode} = useTheme();
   const user = useSelector((state) => state.auth.user);
   const { classes, totalAttendance, loading } = useSelector((state) => state.class);
   const [activeTab, setActiveTab] = useState('today');

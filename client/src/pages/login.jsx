@@ -1,11 +1,12 @@
-import { useState } from 'react';
-import { FiEye, FiEyeOff, FiArrowRight, FiMail, FiLock } from 'react-icons/fi';
-import { Link, useNavigate } from 'react-router-dom';
-import { useDispatch, useSelector } from 'react-redux';
 import { motion } from 'framer-motion';
-import { loginUser } from '../redux/slices/authSlice';
-import { useTheme } from '../context/ThemeContext';
+import { useState } from 'react';
+import {  FiEye, FiEyeOff, FiLock,FiMail } from 'react-icons/fi';
+import { useDispatch, useSelector } from 'react-redux';
+import { Link, useNavigate } from 'react-router-dom';
+
 import logo from '../assets/logo1112.png';
+import { useTheme } from '../context/ThemeContext';
+import { loginUser } from '../redux/slices/authSlice';
 
 const Login = () => {
   const { isDarkMode } = useTheme();
@@ -78,19 +79,19 @@ const Login = () => {
     validateField(name, formData[name]);
   };
 
-  const getInputClassName = (fieldName) => {
-    const baseClass = `w-full py-3.5 pl-12 pr-4 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 ${
-      isDarkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-800'
-    }`;
+  // const getInputClassName = (fieldName) => {
+  //   const baseClass = `w-full py-3.5 pl-12 pr-4 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 ${
+  //     isDarkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-800'
+  //   }`;
     
-    if (validationErrors[fieldName] && focused[fieldName] !== true) {
-      return `${baseClass} border-2 border-red-500 focus:ring-red-400`;
-    }
+  //   if (validationErrors[fieldName] && focused[fieldName] !== true) {
+  //     return `${baseClass} border-2 border-red-500 focus:ring-red-400`;
+  //   }
     
-    return `${baseClass} border border-transparent focus:ring-indigo-500 ${
-      isDarkMode ? 'focus:border-indigo-500' : 'focus:border-indigo-500'
-    }`;
-  };
+  //   return `${baseClass} border border-transparent focus:ring-indigo-500 ${
+  //     isDarkMode ? 'focus:border-indigo-500' : 'focus:border-indigo-500'
+  //   }`;
+  // };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -274,7 +275,7 @@ const Login = () => {
               </Link>
               <div className="mt-2">
                 <span className={isDarkMode ? 'text-gray-400' : 'text-gray-600'}>
-                  Don't have an account?{' '}
+                  Don&apos;t have an account?{' '}
                 </span>
                 <Link
                   to="/signup"

@@ -8,8 +8,11 @@ import BackgroundAnimation from './components/BackgroundAnimation';
 import MainLayout from "./components/MainLayout";
 // Page Imports
 import ClassDetails from './pages/ClassDetails';
+import ContactSupport from "./pages/ContactSupport";
 import EditClass from './pages/EditClass';
 import FaceRegistration from './pages/FaceRegistration';
+import ForgotPassword from "./pages/ForgotPassword";
+import HelpCenter from "./pages/HelpCenter";
 import HomePage from "./pages/HomePage";
 import Login from './pages/login';
 import Signup from './pages/signUp';
@@ -21,7 +24,6 @@ import StudentFindClasses from './pages/StudentFindClasses';
 import Teacher from './pages/Teacher';
 import TeacherHome from "./pages/TeacherHome";
 import TeacherTimetable from './pages/TeacherTimetable';
-import ForgotPassword from "./pages/ForgotPassword";
 
 const FaceCheckRoute = () => {
   // Use Redux state instead of localStorage directly
@@ -124,7 +126,7 @@ function App() {
       {/* Main Content */}
       <div className="relative z-10">
         <Routes>
-          {/* Public Routes (accessible only to guests/non-logged-in users) */}
+          {/* Public Routes (accessible to everyone) */}
           <Route element={<GuestOnlyRoute />}>
             <Route path="/" element={<SplashScreen />} />
             <Route path="/check-signup" element={<SignupCheck />} />
@@ -132,14 +134,16 @@ function App() {
             <Route path="/signup" element={<Signup />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
           </Route>
+          <Route path="/help-center" element={<HelpCenter />} />
+          <Route path="/contact-support" element={<ContactSupport />} />
 
-          {/* Face Registration Route (accessible only to authenticated users with unverified face) */}
+          {/* Face Registration Route */}
           <Route path="/face-registration" element={<FaceRegistration />} />
 
           {/* Face verification check route */}
           <Route path="/verify-face" element={<FaceCheckRoute />} />
           
-          {/* Protected Routes - Wrapped with MainLayout for conditional navigation */}
+          {/* Protected Routes - Wrapped with MainLayout */}
           <Route element={<ProtectedRoute />}>
             <Route element={<MainLayout />}>
               {/* Teacher Routes */}
@@ -149,15 +153,16 @@ function App() {
                 <Route path="/teacher-home" element={<TeacherHome />} />
                 <Route path="/class/:id" element={<ClassDetails />} />
                 <Route path="/edit-class/:id" element={<EditClass />} />
+              
               </Route>
               
               {/* Student Routes */}
               <Route element={<RoleRoute allowedRoles={["student"]} />}>
                 <Route path="/student" element={<Student />} />
-                {/* <Route path="/student-classes" element={<StudentClasses />} /> */}
                 <Route path="/student-home" element={<HomePage />} />
                 <Route path="/student-attendance" element={<StudentAttendance />} />
                 <Route path="/student-find-classes" element={<StudentFindClasses />} />
+              
               </Route>
             </Route>
           </Route>

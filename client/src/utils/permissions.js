@@ -288,59 +288,83 @@ export const isMobileDevice = () => {
   return /android|ipad|iphone|ipod|webos|blackberry|windows phone/i.test(userAgent);
 };
 
-export const checkAndRequestPermissions = async () => {
+// Check if running in web browser
+const isWeb = typeof window !== 'undefined' && window.navigator;
+
+// Function to check device capabilities
+export const checkDeviceCapabilities = async () => {
+  if (!isWeb) return { hasMicrophone: false, hasCamera: false };
+
   try {
-    // First check if the browser/device supports getUserMedia
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      throw new Error('Media devices not supported');
-    }
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const hasMicrophone = devices.some(device => device.kind === 'audioinput');
+    const hasCamera = devices.some(device => device.kind === 'videoinput');
+    return { hasMicrophone, hasCamera };
+  } catch (error) {
+    console.error('Error checking device capabilities:', error);
+    return { hasMicrophone: false, hasCamera: false };
+  }
+};
 
-    // Request microphone permission explicitly first
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      // Stop the stream immediately after getting permission
-      stream.getTracks().forEach(track => track.stop());
-    } catch (micError) {
-      console.error('Microphone permission error:', micError);
-      throw new Error('Microphone permission denied');
-    }
+// Function to check and request permissions
+export const checkAndRequestPermissions = async (userType) => {
+  if (!isWeb) return false;
 
-    // Then check camera permissions
-    const cameraStatus = await Camera.checkPermissions();
-    if (cameraStatus.camera !== 'granted') {
-      const requestResult = await Camera.requestPermissions();
-      if (requestResult.camera !== 'granted') {
-        throw new Error('Camera permission denied');
+  try {
+    // For web, we use the Permissions API if available
+    if (navigator.permissions) {
+      const micPermission = await navigator.permissions.query({ name: 'microphone' });
+      const cameraPermission = await navigator.permissions.query({ name: 'camera' });
+
+      // If either permission is denied, return false
+      if (micPermission.state === 'denied' || cameraPermission.state === 'denied') {
+        return false;
       }
     }
+
+    // Request both permissions simultaneously
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: true,
+      video: true
+    });
+
+    // Clean up the stream after getting permissions
+    stream.getTracks().forEach(track => track.stop());
 
     return true;
   } catch (error) {
     console.error('Permission error:', error);
-    return {
-      granted: false,
-      error: error.message
-    };
+    return false;
   }
 };
 
-// Utility function to check if device has necessary hardware
-export const checkDeviceCapabilities = async () => {
+// Function to check current permission status
+export const checkPermissionStatus = async () => {
+  if (!isWeb) return { microphone: 'denied', camera: 'denied' };
+
   try {
-    // Check if device has microphone
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    const hasMicrophone = devices.some(device => device.kind === 'audioinput');
-    const hasCamera = devices.some(device => device.kind === 'videoinput');
-    
+    if (navigator.permissions) {
+      const [micPermission, cameraPermission] = await Promise.all([
+        navigator.permissions.query({ name: 'microphone' }),
+        navigator.permissions.query({ name: 'camera' })
+      ]);
+
+      return {
+        microphone: micPermission.state,
+        camera: cameraPermission.state
+      };
+    }
+
+    // Fallback for browsers that don't support Permissions API
     return {
-      hasMicrophone,
-      hasCamera
+      microphone: 'prompt',
+      camera: 'prompt'
     };
   } catch (error) {
-    console.error('Error checking device capabilities:', error);
+    console.error('Error checking permission status:', error);
     return {
-      hasMicrophone: false,
-      hasCamera: false
+      microphone: 'denied',
+      camera: 'denied'
     };
   }
 }; 

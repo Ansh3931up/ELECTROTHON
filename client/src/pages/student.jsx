@@ -1,6 +1,6 @@
-import { motion } from 'framer-motion';
+
 import { useEffect, useState } from "react";
-import { FiAlertTriangle, FiMessageSquare, FiSearch, FiWifiOff, FiXCircle } from 'react-icons/fi';
+import { FiAlertTriangle, FiSearch, FiXCircle } from 'react-icons/fi';
 import { useDispatch, useSelector } from "react-redux";
 
 import BottomNavBar from '../components/BottomNavBar';
@@ -637,13 +637,9 @@ const Student = () => {
             const attendanceSessionType = cls.activeAttendanceSession?.sessionType;
             const isSelected = selectedClassId === cls._id;
             const isDetecting = detectionState.active && detectionState.classId === cls._id;
-            
             return (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: index * 0.05 }}
-              key={cls._id}
+              <div
+                key={cls._id}
                 className={`relative overflow-hidden rounded-xl shadow-lg cursor-pointer ${isSelected ? 'ring-2 ring-blue-500' : ''}`}
                 onClick={() => {
                   setSelectedClassId(cls._id);
@@ -719,7 +715,7 @@ const Student = () => {
                     </div>
                   </div>
                 </div>
-            </motion.div>
+            </div>
             );
           })}
         </div>

@@ -1,19 +1,19 @@
-import { useState } from "react";
-import { Link, useNavigate } from 'react-router-dom';
-import { useDispatch, useSelector } from "react-redux";
 import { motion } from 'framer-motion';
+import { useState } from "react";
 import { 
-  HiOutlineUser, 
-  HiOutlineMail, 
-  HiOutlinePhone, 
-  HiOutlineLockClosed, 
   HiOutlineAcademicCap,
   HiOutlineEye, 
-  HiOutlineEyeOff
-} from 'react-icons/hi';
-import { signupUser } from "../redux/slices/authSlice";
-import { useTheme } from '../context/ThemeContext';
+  HiOutlineEyeOff,
+  HiOutlineLockClosed, 
+  HiOutlineMail, 
+  HiOutlinePhone, 
+  HiOutlineUser} from 'react-icons/hi';
+import { useDispatch, useSelector } from "react-redux";
+import { Link, useNavigate } from 'react-router-dom';
+
 import logo from '../assets/logo1112.png';
+import { useTheme } from '../context/ThemeContext';
+import { signupUser } from "../redux/slices/authSlice";
 
 const Signup = () => {
   const dispatch = useDispatch();
@@ -159,19 +159,19 @@ const Signup = () => {
     }
   };
 
-  const getInputClassName = (fieldName) => {
-    const baseClass = `w-full py-3.5 pl-12 pr-4 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 ${
-      isDarkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-800'
-    }`;
+  // const getInputClassName = (fieldName) => {
+  //   const baseClass = `w-full py-3.5 pl-12 pr-4 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 ${
+  //     isDarkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-800'
+  //   }`;
     
-    if (validationErrors[fieldName] && focused[fieldName] !== true) {
-      return `${baseClass} border-2 border-red-500 focus:ring-red-400`;
-    }
+  //   if (validationErrors[fieldName] && focused[fieldName] !== true) {
+  //     return `${baseClass} border-2 border-red-500 focus:ring-red-400`;
+  //   }
     
-    return `${baseClass} border border-transparent focus:ring-indigo-500 ${
-      isDarkMode ? 'focus:border-indigo-500' : 'focus:border-indigo-500'
-    }`;
-  };
+  //   return `${baseClass} border border-transparent focus:ring-indigo-500 ${
+  //     isDarkMode ? 'focus:border-indigo-500' : 'focus:border-indigo-500'
+  //   }`;
+  // };
 
   // Input field configuration with enhanced icons and validation
   const inputFields = [

@@ -6,6 +6,7 @@ import morgan from "morgan";
 import userRoutes from "./routes/user.routes.js";
 // import studentRoutes from "./routes/student.routes.js";
 import classRoutes from "./routes/class.routes.js";
+import supportRoutes from "./routes/support.routes.js";
 import errorMiddleware from "./middlewares/error.middleware.js";
 
 
@@ -50,6 +51,7 @@ app.use("/ping", function (req, res) {
 
 app.use("/api/v1/user", userRoutes);
 app.use("/api/v1/class", classRoutes);
+app.use("/api/v1/support", supportRoutes);
 
 
 app.all("*", (req, res) => {
