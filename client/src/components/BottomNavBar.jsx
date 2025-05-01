@@ -187,7 +187,7 @@ const BottomNavBar = ({ user }) => {
       isAddButton: true
     },
     { label: 'Attendance', path: '/student-attendance', icon: <FiCalendar size={20} /> },
-    { label: 'Profile', path: '/student', icon: <FiUser size={20} /> },
+    { label: 'Mark', path: '/student', icon: <FiUser size={20} /> },
   ];
   
   const bottomNavItems = isTeacher ? teacherNavItems : studentNavItems;

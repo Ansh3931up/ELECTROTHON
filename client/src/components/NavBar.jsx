@@ -117,39 +117,7 @@ const NavBar = () => {
   };
 
   // Account & Settings navigation items
-  const accountNavItems = [
-    { 
-      label: 'My Profile', 
-      path: '/profile', 
-      icon: (
-        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M16 7C16 9.20914 14.2091 11 12 11C9.79086 11 8 9.20914 8 7C8 4.79086 9.79086 3 12 3C14.2091 3 16 4.79086 16 7Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          <path d="M12 14C8.13401 14 5 17.134 5 21H19C19 17.134 15.866 14 12 14Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-      ),
-    },
-    { 
-      label: 'Account Settings', 
-      path: '/account', 
-      icon: (
-        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M10.3246 4.31731C10.751 2.5609 13.249 2.5609 13.6754 4.31731C13.9508 5.45193 15.2507 5.99038 16.2478 5.38285C17.7913 4.44239 19.5576 6.2087 18.6172 7.75218C18.0096 8.74925 18.5481 10.0492 19.6827 10.3246C21.4391 10.751 21.4391 13.249 19.6827 13.6754C18.5481 13.9508 18.0096 15.2507 18.6172 16.2478C19.5576 17.7913 17.7913 19.5576 16.2478 18.6172C15.2507 18.0096 13.9508 18.5481 13.6754 19.6827C13.249 21.4391 10.751 21.4391 10.3246 19.6827C10.0492 18.5481 8.74926 18.0096 7.75219 18.6172C6.2087 19.5576 4.44239 17.7913 5.38285 16.2478C5.99038 15.2507 5.45193 13.9508 4.31731 13.6754C2.5609 13.249 2.5609 10.751 4.31731 10.3246C5.45193 10.0492 5.99037 8.74926 5.38285 7.75218C4.44239 6.2087 6.2087 4.44239 7.75219 5.38285C8.74926 5.99037 10.0492 5.45193 10.3246 4.31731Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M15 12C15 13.6569 13.6569 15 12 15C10.3431 15 9 13.6569 9 12C9 10.3431 10.3431 9 12 9C13.6569 9 15 10.3431 15 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      ),
-    },
-    { 
-      label: 'Notifications', 
-      path: '/notifications', 
-      icon: (
-        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M15 17H20L18.5951 15.5951C18.2141 15.2141 18 14.6973 18 14.1585V11C18 8.38757 16.3304 6.16509 14 5.34142V5C14 3.89543 13.1046 3 12 3C10.8954 3 10 3.89543 10 5V5.34142C7.66962 6.16509 6 8.38757 6 11V14.1585C6 14.6973 5.78595 15.2141 5.40493 15.5951L4 17H9M15 17V18C15 19.6569 13.6569 21 12 21C10.3431 21 9 19.6569 9 18V17M15 17H9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-      ),
-      badge: 3
-    },
-  ];
-
+ 
   // Support & Help navigation items
   const supportNavItems = [
     { 
@@ -277,36 +245,7 @@ const NavBar = () => {
               {/* Navigation Sections with modern styling */}
               <div className="space-y-6 px-4 py-4">
                 {/* Account & Settings Section */}
-                <div>
-                  <div className="text-white/60 text-xs font-medium uppercase tracking-wider mb-3 px-1">
-                    ACCOUNT & SETTINGS
-                  </div>
-                  <ul className="space-y-1.5">
-                    {accountNavItems.map((item, index) => (
-                      <li key={index}>
-                        <Link 
-                          to={item.path} 
-                          className={`flex items-center px-3 py-2.5 rounded-xl transition-all duration-200 hover:scale-[1.02] ${isDarkMode ? 'text-white hover:bg-gray-800/50 active:bg-gray-700/50' : 'text-white hover:bg-[#002550]/50 active:bg-[#002040]/50'}`}
-                          onClick={() => setSidebarOpen(false)}
-                        >
-                          <div className={`w-9 h-9 flex items-center justify-center rounded-lg mr-3 ring-1 ring-white/10 ${isDarkMode ? 'bg-gray-800/50' : 'bg-[#002550]/50'}`}>
-                            <span className="text-white">{item.icon}</span>
-                          </div>
-                          <span className="font-medium">{item.label}</span>
-                          {item.badge && (
-                            <div className="ml-auto bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center ring-1 ring-white/20">
-                              {item.badge}
-                            </div>
-                          )}
-                        </Link>
-                      </li>
-                    ))}
-                    <li className="px-3 py-2.5 flex items-center justify-between rounded-xl transition-all duration-200 hover:scale-[1.02]">
-                      <span className="font-medium text-white">Dark Mode</span>
-                      <ThemeToggleButton />
-                    </li>
-                  </ul>
-                </div>
+                
 
                 {/* Support & Help Section */}
                 <div>
@@ -332,7 +271,8 @@ const NavBar = () => {
                 </div>
               </div>
             </div>
-
+            
+            <ThemeToggleButton  className='absolute bottom-2 left-0'/>
             {/* Fixed sign out button with modern styling */}
             <div className="px-4 py-4 border-t ${isDarkMode ? 'border-gray-800/50' : 'border-[#003065]/50'} backdrop-blur-sm">
               <button 
