@@ -295,7 +295,7 @@ const isWeb = typeof window !== 'undefined' && window.navigator;
 export const checkDeviceCapabilities = async () => {
   if (!isWeb) return { hasMicrophone: false, hasCamera: false };
 
-  try {
+    try {
     const devices = await navigator.mediaDevices.enumerateDevices();
     const hasMicrophone = devices.some(device => device.kind === 'audioinput');
     const hasCamera = devices.some(device => device.kind === 'videoinput');
@@ -303,7 +303,7 @@ export const checkDeviceCapabilities = async () => {
   } catch (error) {
     console.error('Error checking device capabilities:', error);
     return { hasMicrophone: false, hasCamera: false };
-  }
+    }
 };
 
 // Function to check and request permissions

@@ -4,7 +4,7 @@ import {
 FiBook, FiCalendar,
 FiHome, FiMenu, FiPlus,FiPlusCircle, 
 FiUser, FiX} from 'react-icons/fi';
-import { useDispatch, useSelector } from 'react-redux';
+import { useDispatch } from 'react-redux';
 import {  NavLink,useLocation, useNavigate } from 'react-router-dom';
 
 import { useTheme } from '../context/ThemeContext'; // Import useTheme
@@ -18,24 +18,22 @@ const BottomNavBar = ({ user }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  const students = useSelector((state) => state.auth.students);
-  const { isDarkMode } = useTheme(); // Use context for dark mode state
+  const { isDarkMode } = useTheme();
 
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [formError, setFormError] = useState(''); // For displaying form errors
+  const [formError, setFormError] = useState('');
 
   const [newClass, setNewClass] = useState({
     className: "",
-    schedule: [], // Now an array of { day: String, timing: [String] }
+    schedule: [],
     classCode: "",
     batch: "",
-    status: "active",
-    studentIds: [],
+    status: "active"
   });
 
   // --- State for the *current* schedule slot being added ---
-  const [currentScheduleDay, setCurrentScheduleDay] = useState(daysOfWeek[0]); // Default to Monday
-  const [currentScheduleTimings, setCurrentScheduleTimings] = useState(''); // Input field for comma-separated times
+  const [currentScheduleDay, setCurrentScheduleDay] = useState(daysOfWeek[0]);
+  const [currentScheduleTimings, setCurrentScheduleTimings] = useState('');
 
   const isTeacher = user?.role === 'teacher';
 
@@ -97,9 +95,8 @@ const BottomNavBar = ({ user }) => {
 
   const handleCreateClass = (e) => {
     e.preventDefault();
-    setFormError(''); // Clear previous errors
-    console.log("user011", user);
-    if (!user?._id) { // Use direct _id access
+    setFormError('');
+    if (!user?._id) {
       console.error("User ID not found in user prop for creating class.");
       setFormError("Authentication error. Please log in again.");
       return;
@@ -118,47 +115,37 @@ const BottomNavBar = ({ user }) => {
 
     const classData = {
       className: newClass.className,
-      schedule: newClass.schedule, // Send the array of slots
+      schedule: newClass.schedule,
       classCode: newClass.classCode,
       batch: newClass.batch,
-      status: newClass.status,
-      studentIds: newClass.studentIds,
+      status: newClass.status
     };
-    console.log("Dispatching createClass with data:", classData);
+
     dispatch(createClass(classData))
       .unwrap()
-      .then(() => {
+      .then((response) => {
           console.log("Class created successfully!");
           setShowCreateForm(false);
-          // Reset state including the schedule array
+          setShowPasscodeModal(true);
+          setGeneratedPasscode(response.classPasscode);
           setNewClass({
             className: "",
-            schedule: [], // Reset schedule
+            schedule: [],
             classCode: "",
             batch: "",
-            status: "active",
-            studentIds: []
+            status: "active"
           });
-          setCurrentScheduleTimings(''); // Reset temporary inputs too
+          setCurrentScheduleTimings('');
           setCurrentScheduleDay(daysOfWeek[0]);
           setFormError('');
       })
       .catch((error) => {
            const errorMsg = error?.message || error || "An unknown error occurred.";
            console.error("Failed to create class:", errorMsg);
-           setFormError(`Failed to create class: ${errorMsg}`); // Display error to user
+           setFormError(`Failed to create class: ${errorMsg}`);
       });
   };
 
-  const handleStudentSelection = (studentId) => {
-    setNewClass(prev => ({
-      ...prev,
-      studentIds: prev.studentIds.includes(studentId)
-        ? prev.studentIds.filter(id => id !== studentId)
-        : [...prev.studentIds, studentId]
-    }));
-  };
-  
   const teacherNavItems = [
     { label: 'Home', path: '/teacher-home', icon: <FiHome size={20} /> },
     { label: 'Classes', path: '/teacher', icon: <FiBook size={20} /> },
@@ -191,6 +178,28 @@ const BottomNavBar = ({ user }) => {
   ];
   
   const bottomNavItems = isTeacher ? teacherNavItems : studentNavItems;
+
+  // Add new state for passcode modal
+  const [showPasscodeModal, setShowPasscodeModal] = useState(false);
+  const [generatedPasscode, setGeneratedPasscode] = useState('');
+
+  // Add state for copy feedback
+  const [copySuccess, setCopySuccess] = useState(false);
+
+  // Update copy passcode function with feedback
+  const handleCopyPasscode = async () => {
+    try {
+      await navigator.clipboard.writeText(generatedPasscode);
+      setCopySuccess(true);
+      // Reset success message after 2 seconds
+      setTimeout(() => {
+        setCopySuccess(false);
+      }, 2000);
+    } catch (err) {
+      console.error('Failed to copy text: ', err);
+      setFormError('Failed to copy passcode to clipboard');
+    }
+  };
 
   if (!user) return null;
 
@@ -255,7 +264,7 @@ const BottomNavBar = ({ user }) => {
       {isTeacher && showCreateForm && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 px-4 py-6 backdrop-blur-sm">
           <div className={`rounded-2xl shadow-xl w-full max-w-lg transform transition-all max-h-[90vh] flex flex-col border ${
-              isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-transparent' // Darker bg, subtle border
+              isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-transparent'
           }`}>
             <div className={`border-b px-6 py-4 flex items-center justify-between ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
               <h2 className={`text-xl font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-800'}`}>Create New Class</h2>
@@ -402,39 +411,6 @@ const BottomNavBar = ({ user }) => {
                 </select>
               </div>
 
-              <div>
-                <label className={labelClass}>
-                  Select Students <span className={isDarkMode ? 'text-gray-500' : 'text-gray-500'}> (Optional)</span>
-                </label>
-                <div className={`max-h-40 overflow-y-auto border rounded-lg ${isDarkMode ? 'border-gray-600 bg-gray-700/40' : 'border-gray-300 bg-gray-50/50'}`}>
-                  {students && students.length > 0 ? (
-                     students.map((student) => (
-                        <div
-                            key={student._id}
-                            className={`flex items-center p-3 border-b last:border-b-0 transition-colors ${isDarkMode ? 'border-gray-700 hover:bg-gray-600/50' : 'border-gray-200 hover:bg-blue-50'}`}
-                        >
-                            <input
-                                type="checkbox"
-                                id={`student-${student._id}`}
-                                checked={newClass.studentIds.includes(student._id)}
-                                onChange={() => handleStudentSelection(student._id)}
-                                className={`w-4 h-4 rounded border-gray-300 dark:border-gray-500 focus:ring-blue-500 dark:focus:ring-blue-600 dark:focus:ring-offset-gray-800 transition-colors mr-3 flex-shrink-0 cursor-pointer ${isDarkMode ? 'bg-gray-600 checked:bg-blue-500' : 'text-blue-600'}`}
-                            />
-                            <label htmlFor={`student-${student._id}`} className="flex-1 cursor-pointer">
-                                <div className={`text-sm font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>{student.fullName}</div>
-                                <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{student.email}</div>
-                            </label>
-                        </div>
-                    ))
-                  ) : (
-                     <p className={`text-sm p-3 text-center ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>Loading students or none available...</p>
-                  )}
-                </div>
-                <div className={`mt-2 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  Selected: {newClass.studentIds.length} student(s)
-                </div>
-              </div>
-
               {formError && !formError.includes('Batch') && (
                 <p className={`text-sm p-3 rounded border text-center ${isDarkMode ? 'text-red-300 bg-red-900/30 border-red-700/50' : 'text-red-600 bg-red-100 border-red-300'}`}>{formError}</p>
               )}
@@ -454,6 +430,84 @@ const BottomNavBar = ({ user }) => {
                 className={`px-5 py-2 text-sm font-medium rounded-lg transition-all shadow-sm text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${isDarkMode ? 'bg-blue-600 hover:bg-blue-700 focus:ring-offset-gray-800' : 'bg-blue-600 hover:bg-blue-700 focus:ring-offset-white'}`}
               >
                 Create Class
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Update the Passcode Modal */}
+      {showPasscodeModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 px-4 py-6 backdrop-blur-sm">
+          <div className={`rounded-2xl shadow-xl w-full max-w-md transform transition-all max-h-[90vh] flex flex-col border ${
+              isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-transparent'
+          }`}>
+            <div className={`border-b px-6 py-4 flex items-center justify-between ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+              <h2 className={`text-xl font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-800'}`}>Class Created Successfully!</h2>
+              <button
+                onClick={() => {
+                  setShowPasscodeModal(false);
+                  setCopySuccess(false); // Reset copy state when closing
+                }}
+                className={`p-1 rounded-full transition-colors ${isDarkMode ? 'text-gray-400 hover:bg-gray-600' : 'text-gray-400 hover:bg-gray-100'}`}
+                aria-label="Close modal"
+              >
+                <FiX size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <p className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                Share this passcode with your students so they can join the class:
+              </p>
+              
+              <div className={`flex items-center justify-between p-3 rounded-lg border ${
+                isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-200'
+              }`}>
+                <span className={`font-mono text-lg ${isDarkMode ? 'text-blue-300' : 'text-blue-600'}`}>
+                  {generatedPasscode}
+                </span>
+                <button
+                  onClick={handleCopyPasscode}
+                  className={`relative px-3 py-1 rounded-md text-sm font-medium transition-all duration-200 ${
+                    copySuccess
+                      ? isDarkMode 
+                        ? 'bg-green-600 text-white' 
+                        : 'bg-green-500 text-white'
+                      : isDarkMode 
+                        ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                        : 'bg-blue-500 hover:bg-blue-600 text-white'
+                  }`}
+                >
+                  {copySuccess ? 'Copied!' : 'Copy'}
+                  {copySuccess && (
+                    <span className="absolute -top-8 left-1/2 transform -translate-x-1/2 px-2 py-1 text-xs rounded bg-black text-white whitespace-nowrap">
+                      Copied to clipboard!
+                    </span>
+                  )}
+                </button>
+              </div>
+
+              <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                Students can use this passcode to join your class from their dashboard.
+              </p>
+            </div>
+
+            <div className={`flex items-center justify-end space-x-3 p-4 border-t rounded-b-2xl ${
+              isDarkMode ? 'border-gray-700 bg-gray-800/90' : 'border-gray-200 bg-gray-50'
+            }`}>
+              <button
+                onClick={() => {
+                  setShowPasscodeModal(false);
+                  setCopySuccess(false); // Reset copy state when closing
+                }}
+                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                  isDarkMode 
+                    ? 'bg-gray-600 hover:bg-gray-500 text-gray-200' 
+                    : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                }`}
+              >
+                Close
               </button>
             </div>
           </div>

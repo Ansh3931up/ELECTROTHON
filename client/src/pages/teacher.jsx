@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FiCalendar, FiUsers, FiSearch, FiCircle } from 'react-icons/fi';
+import { FiCalendar, FiUsers, FiSearch, FiCircle, FiCopy, FiCheck } from 'react-icons/fi';
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 
@@ -26,6 +26,7 @@ const Teacher = () => {
   // const [isSidebarOpen, setSidebarOpen] = useState(false); // Keep if needed by NavBar, not BottomNavBar
   const [searchTerm, setSearchTerm] = useState('');
   const [activeFilter, setActiveFilter] = useState('active'); // State for the active status filter, default to 'active'
+  const [copiedClassId, setCopiedClassId] = useState(null);
 
   useEffect(() => {
     // Use optional chaining for safer access
@@ -126,6 +127,21 @@ const Teacher = () => {
   // --- Filter Button Data ---
   const filterOptions = ['active', 'inactive', 'ended', 'all'];
 
+  // Add copy passcode handler
+  const handleCopyPasscode = async (e, cls) => {
+    e.stopPropagation(); // Prevent card click event
+    try {
+      await navigator.clipboard.writeText(cls.classPasscode);
+      setCopiedClassId(cls._id);
+      setTimeout(() => {
+        setCopiedClassId(null);
+      }, 2000);
+    } catch (err) {
+      console.error('Failed to copy passcode:', err);
+      // You could add a toast notification here for errors
+    }
+  };
+
   return (
     <div className={`pb-20 h-fit bg-transparent transition-colors duration-300`}>
       <div className="p-4 max-w-4xl mx-auto">
@@ -184,6 +200,7 @@ const Teacher = () => {
                 const studentCount = cls.studentList?.length || 0;
                 const displaySchedule = formatSchedule(cls.schedule);
                 const displayBatch = cls.batch || ''; // Empty string if N/A
+                const isCopied = copiedClassId === cls._id;
 
               return (
                 <div
@@ -199,11 +216,31 @@ const Teacher = () => {
 
                      {/* Top Section: Title & Status */}
                     <div className="relative z-10 flex justify-between items-start">
-                        <h3 className="font-semibold text-lg sm:text-xl leading-tight">{cls.className || 'Unnamed Class'}</h3>
-                         {/* Status Dot */}
-                         <div className="flex items-center space-x-1.5 mt-1" title={cls.status ? cls.status.charAt(0).toUpperCase() + cls.status.slice(1) : 'Unknown'}>
-                             <span className={`w-2.5 h-2.5 rounded-full ${statusColor} shadow-sm`}></span> {/* Added subtle shadow to dot */}
-                      </div>
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-lg sm:text-xl leading-tight">{cls.className || 'Unnamed Class'}</h3>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          {cls.classPasscode && (
+                            <button
+                              onClick={(e) => handleCopyPasscode(e, cls)}
+                              className={`p-1.5 rounded-lg transition-all duration-200 ${
+                                isCopied
+                                  ? 'bg-green-500/20 hover:bg-green-500/30'
+                                  : 'bg-white/20 hover:bg-white/30'
+                              }`}
+                              title={isCopied ? 'Passcode copied!' : 'Copy class passcode'}
+                            >
+                              {isCopied ? (
+                                <FiCheck className="w-4 h-4" />
+                              ) : (
+                                <FiCopy className="w-4 h-4" />
+                              )}
+                            </button>
+                          )}
+                          <div className="flex items-center space-x-1.5 mt-1" title={cls.status ? cls.status.charAt(0).toUpperCase() + cls.status.slice(1) : 'Unknown'}>
+                            <span className={`w-2.5 h-2.5 rounded-full ${statusColor} shadow-sm`}></span> {/* Added subtle shadow to dot */}
+                         </div>
+                    </div>
                     </div>
 
                     {/* Bottom Section: Details */}

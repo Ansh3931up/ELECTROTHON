@@ -379,12 +379,23 @@ export const fetchStudentTotalAttendance = createAsyncThunk(
   }
 );
 
+// Update joinClass thunk
 export const joinClass = createAsyncThunk(
   'class/joinClass',
-  async ({ classId, studentId }, { rejectWithValue }) => {
+  async ({ classPasscode, studentId }, { rejectWithValue }) => {
     try {
-      const response = await axios.post(`/api/classes/${classId}/join`, { studentId });
-      return response.data;
+      const token = localStorage.getItem("token");
+      const response = await axios.post(
+        `${API_URL}/join`,
+        { classPasscode, studentId },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+      return response.data.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Failed to join class');
     }

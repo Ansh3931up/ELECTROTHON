@@ -15,6 +15,10 @@ const StudentFindClasses = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [joiningClass, setJoiningClass] = useState(null);
   const [searchType, setSearchType] = useState('all'); // 'all', 'code', 'teacher', 'class'
+  const [showJoinModal, setShowJoinModal] = useState(false);
+  const [selectedClass, setSelectedClass] = useState(null);
+  const [passcode, setPasscode] = useState('');
+  const [joinError, setJoinError] = useState('');
   console.log("user 2221",user);
   useEffect(() => {
     if (user?.user?.schoolCode) {
@@ -22,14 +26,37 @@ const StudentFindClasses = () => {
     }
   }, [user, dispatch]);
 
-  const handleJoinClass = async (classId) => {
+  const handleJoinClick = (classData) => {
+    setSelectedClass(classData);
+    setShowJoinModal(true);
+    setPasscode('');
+    setJoinError('');
+  };
+
+  const handleJoinClass = async () => {
+    if (!passcode.trim()) {
+      setJoinError('Please enter the class passcode');
+      return;
+    }
+
+    // Check if we have a valid user ID
+    if (!user?.user?._id) {
+      setJoinError('User authentication error. Please try logging in again.');
+      return;
+    }
+
     try {
-      setJoiningClass(classId);
-      await dispatch(joinClass({ classId, studentId: user._id })).unwrap();
-      // Refresh the teachers list after joining
-      dispatch(fetchTeachersBySchool(user.schoolCode));
+      setJoiningClass(selectedClass._id);
+      await dispatch(joinClass({ 
+        classPasscode: passcode.trim(),
+        studentId: user.user._id // Fix: Use the correct path to user ID
+      })).unwrap();
+      
+      // Close modal and refresh the teachers list
+      setShowJoinModal(false);
+      dispatch(fetchTeachersBySchool(user.user.schoolCode)); // Fix: Use the correct path to school code
     } catch (err) {
-      console.error(err);
+      setJoinError(err.message || 'Failed to join class. Please check the passcode.');
     } finally {
       setJoiningClass(null);
     }
@@ -74,8 +101,13 @@ const StudentFindClasses = () => {
     );
   }).map(teacher => ({
     ...teacher,
-    // Filter classes if searching by class code or name
+    // Filter classes if searching by class code or name, and exclude classes student has already joined
     classes: teacher.classes.filter(cls => {
+      // Skip if student has already joined this class
+      if (user?.user?.classId?.includes(cls._id)) {
+        return false;
+      }
+
       if (!searchQuery) return true;
       const searchLower = searchQuery.toLowerCase().trim();
       
@@ -266,22 +298,21 @@ const StudentFindClasses = () => {
 
                       {/* Updated Join button with enhanced shadows and highlights */}
                     <button
-                      onClick={() => handleJoinClass(cls._id)}
-                      disabled={joiningClass === cls._id}
-                        className={`w-full py-2.5 px-3 transition-all duration-200 font-medium text-sm relative
-                          ${joiningClass === cls._id
-                            ? isDarkMode
-                              ? 'bg-gray-700 text-gray-300'
-                              : 'bg-gray-200 text-gray-500'
-                            : isDarkMode
-                              ? 'bg-white/95 hover:bg-white text-purple-600 hover:text-purple-700 active:bg-white/90'
-                              : 'bg-white hover:bg-purple-50 text-purple-600 hover:text-purple-700 active:bg-purple-100'
-                          }
-                          disabled:opacity-50 disabled:cursor-not-allowed
-                          border-t border-white/10 backdrop-blur-sm
-                          shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] hover:shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.15)]
-                          ${isDarkMode ? 'shadow-dark' : 'shadow-light'}
-                        `}
+                      onClick={() => handleJoinClick(cls)}
+                      className={`w-full py-2.5 px-3 transition-all duration-200 font-medium text-sm relative
+                        ${joiningClass === cls._id
+                          ? isDarkMode
+                            ? 'bg-gray-700 text-gray-300'
+                            : 'bg-gray-200 text-gray-500'
+                          : isDarkMode
+                            ? 'bg-white/95 hover:bg-white text-purple-600 hover:text-purple-700 active:bg-white/90'
+                            : 'bg-white hover:bg-purple-50 text-purple-600 hover:text-purple-700 active:bg-purple-100'
+                        }
+                        disabled:opacity-50 disabled:cursor-not-allowed
+                        border-t border-white/10 backdrop-blur-sm
+                        shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] hover:shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.15)]
+                        ${isDarkMode ? 'shadow-dark' : 'shadow-light'}
+                      `}
                     >
                         <div className="flex items-center justify-center space-x-1">
                           {joiningClass === cls._id ? (
@@ -318,6 +349,84 @@ const StudentFindClasses = () => {
           )}
         </div>
       </div>
+
+      {/* Add Join Class Modal */}
+      {showJoinModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 px-4 py-6 backdrop-blur-sm">
+          <div className={`rounded-2xl shadow-xl w-full max-w-md transform transition-all max-h-[90vh] flex flex-col border ${
+              isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-transparent'
+          }`}>
+            <div className={`border-b px-6 py-4 flex items-center justify-between ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+              <h2 className={`text-xl font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-800'}`}>
+                Join Class: {selectedClass?.className}
+              </h2>
+              <button
+                onClick={() => setShowJoinModal(false)}
+                className={`p-1 rounded-full transition-colors ${isDarkMode ? 'text-gray-400 hover:bg-gray-600' : 'text-gray-400 hover:bg-gray-100'}`}
+                aria-label="Close modal"
+              >
+                <FiX size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label htmlFor="passcode" className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                  Enter Class Passcode <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  id="passcode"
+                  value={passcode}
+                  onChange={(e) => setPasscode(e.target.value)}
+                  placeholder="Enter the class passcode"
+                  className={`w-full px-4 py-2 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${
+                    isDarkMode 
+                      ? 'bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400' 
+                      : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                  }`}
+                />
+                {joinError && (
+                  <p className={`mt-2 text-sm ${isDarkMode ? 'text-red-400' : 'text-red-500'}`}>
+                    {joinError}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex items-center space-x-3">
+                <button
+                  onClick={() => setShowJoinModal(false)}
+                  className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                    isDarkMode 
+                      ? 'bg-gray-600 hover:bg-gray-500 text-gray-200' 
+                      : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                  }`}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleJoinClass}
+                  disabled={joiningClass === selectedClass?._id}
+                  className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                    isDarkMode 
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                      : 'bg-blue-500 hover:bg-blue-600 text-white'
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                  {joiningClass === selectedClass?._id ? (
+                    <span className="flex items-center justify-center">
+                      <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span>
+                      Joining...
+                    </span>
+                  ) : (
+                    'Join Class'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add this style to hide scrollbar but keep functionality */}
       <style jsx global>{`

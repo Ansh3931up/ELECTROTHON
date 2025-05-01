@@ -74,9 +74,19 @@ const classSchema = new mongoose.Schema({
         ref: "User",
         required: [true, "Teacher ID is required"],
     },
+    classPasscode: {
+        type: String,
+        required: [true, "Class passcode is required"],
+        minLength: [6, "Class passcode must be at least 6 characters"],
+        maxLength: [10, "Class passcode must be less than 10 characters"],
+        unique: true,
+        trim: true,
+        uppercase: true,
+    },
     studentList: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",
+        default: [], // Make it optional with empty default
     }],
     frequency: [{
         type: Number,

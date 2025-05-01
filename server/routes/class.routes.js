@@ -1,4 +1,4 @@
-import { Router } from "express";
+import express from "express";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 import { 
   generateAttendance, 
@@ -18,19 +18,30 @@ import {
   getStudentTotalAttendance,
   joinClass,
   getClassAttendanceStats,
-  getTeacherDashboardDetails
+  getTeacherDashboardDetails,
+
 } from "../controllers/class.controllers.js";
 
-const router = Router();
-router.post("/create-class",verifyJWT, registerClass); //in use
+
+const router = express.Router();
 router.post("/generate-attendance", generateAttendance); //in use
+// Create a new class (teacher only)
+router.post("/create-class",verifyJWT, registerClass);
+
+// Join a class using passcode (student only)
+router.post("/join", joinClass);
+
+// Get class by ID
+// router.get("/:classId", getClassById);
+
+// Get teacher's classes
+router.get("/teacher/:teacherId", getTeacherClasses);
+
+// Get student's classes
+router.get("/student/:studentId", getStudentClasses);
 
 // Route to get frequency for a specific class
 router.get('/frequency/:classId', getClassfrequency); //in use
-
-// New routes for getting classes
-router.get('/teacher/:teacherId', getTeacherClasses); //in use
-router.get('/student/:studentId', getStudentClasses); //in use
 
 // --- NEW ROUTE for Student's Total Attendance ---
 router.get('/student/:studentId/total-attendance', getStudentTotalAttendance);
@@ -58,12 +69,7 @@ router.get('/:classId', getClassDetails); //in use
 // --- Class Routes ---
 router.patch('/:classId', verifyJWT, editClassDetails);
 
-// Add route for joining a class
-router.post('/:classId/join', verifyJWT, joinClass);
-
 // Add new route for getting class attendance statistics
 router.get('/:classId/attendance-stats', verifyJWT, getClassAttendanceStats);
-
-
 
 export default router;

@@ -103,7 +103,7 @@ userSchema.methods = {
   generatePasswordResetToken: async function () {
     // Generate a 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    
+
     // Hash the OTP and store it
     this.forgotPasswordToken = await bcrypt.hash(otp, 10);
     this.forgotPasswordExpiry = Date.now() + 15 * 60 * 1000; // 15 minutes expiry

@@ -6,87 +6,77 @@ import { emitToClass } from '../config/socket.js';
 import expressAsyncHandler from 'express-async-handler';
 const asyncHandler = expressAsyncHandler;
 
-
+// Helper function to generate random passcode
+const generateClassPasscode = () => {
+    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let passcode = '';
+    for (let i = 0; i < 8; i++) {
+        passcode += characters.charAt(Math.floor(Math.random() * characters.length));
+    }
+    return passcode;
+};
 
 // Create a class by a teacher and for now it is using the student list and selecting that student 
 // TODO: make the use of class code to join and get the resources.
-export const registerClass = async (req, res, next) => 
-  {
-    console.log("Received class data:", req.body);
-    console.log("User:", req.user);
-  try {
-    // --- Updated fields from req.body ---
-    const { className, schedule, classCode, batch, studentIds } = req.body;
-    console.log("Received class data:", req.body);
-    const createdBy = req.user?.id; // Assuming auth middleware adds user to req
+export const registerClass = async (req, res, next) => {
+    try {
+        console.log("Received class data:", req.body);
+        console.log("User:", req.user);
+        const { className, schedule, classCode, batch } = req.body;
+        const createdBy = req.user?.id;
 
-    // --- Updated Validations ---
-    if (!className || !schedule || !classCode || !batch || !createdBy) {
-      return next(new AppError("ClassName, Schedule, ClassCode, Batch, and Creator ID are required", 400));
-    }
+        // Validate required fields
+        if (!className || !schedule || !classCode || !batch || !createdBy) {
+            return next(new AppError("ClassName, Schedule, ClassCode, Batch, and Creator ID are required", 400));
+        }
 
-    // Verify if the creator exists and is a teacher (assuming only teachers create classes)
-    // Note: The schema requires teacherId, so we need that too. 
-    // Let's assume createdBy IS the teacherId for simplicity here.
-    // If not, you'll need to pass teacherId separately or adjust logic.
-    const teacher = await User.findById(createdBy);
-    if (!teacher || teacher.role !== "teacher") {
-      return next(
-        new AppError("Invalid Creator ID or user is not a teacher", 400)
-      );
-    }
-    const teacherId = createdBy; // Assign teacherId based on creator
+        // Verify if the creator exists and is a teacher
+        const teacher = await User.findById(createdBy);
+        if (!teacher || teacher.role !== "teacher") {
+            return next(new AppError("Invalid Creator ID or user is not a teacher", 400));
+        }
 
-    // Validate student IDs if provided (remains the same)
-    if (studentIds && studentIds.length > 0) {
-      const students = await User.find({ 
-        _id: { $in: studentIds },
-        role: "student" 
-      });
-      
-      if (students.length !== studentIds.length) {
-        return next(new AppError("One or more student IDs are invalid", 400));
-      }
-    }
+        // Generate a unique class passcode
+        let classPasscode;
+        let isUnique = false;
+        while (!isUnique) {
+            classPasscode = generateClassPasscode();
+            const existingClass = await Class.findOne({ classPasscode });
+            if (!existingClass) {
+                isUnique = true;
+            }
+        }
 
-    // --- Updated Class.create call ---
-    const newClass = await Class.create({
-      className,
-      schedule,
-      classCode, // Added
-      batch,     // Added
-      teacherId, // Using creator as teacher for now
-      createdBy, // Added
-      studentList: studentIds || [],
-      frequency: [], // Initialize as empty
-      attendanceRecords: [] // Initialize as empty
-      // Removed: classType, time, status implicitly
-    });
+        // Create the new class with the generated passcode
+        const newClass = await Class.create({
+            className,
+            schedule,
+            classCode,
+            batch,
+            teacherId: createdBy,
+            createdBy,
+            classPasscode,
+            studentList: [], // Initialize with empty array
+            frequency: [],
+            attendanceRecords: []
+        });
 
-    // Update classId for all students (remains the same)
-    if (studentIds && studentIds.length > 0) {
-      await User.updateMany(
-        { _id: { $in: studentIds } },
-        { $push: { classId: newClass._id } }
-      );
+        res.status(201).json({
+            success: true,
+            message: "Class registered successfully",
+            data: newClass,
+        });
+    } catch (error) {
+        // Handle potential duplicate key error for classCode
+        if (error.code === 11000 && error.keyPattern?.classCode) {
+            return next(new AppError(`Class code '${error.keyValue.classCode}' already exists.`, 409));
+        }
+        if (error.name === 'ValidationError') {
+            return next(new AppError(error.message, 400));
+        }
+        console.error("Error registering class:", error);
+        next(new AppError("Failed to register class", 500));
     }
-
-    res.status(201).json({
-      success: true,
-      message: "Class registered successfully",
-      data: newClass,
-    });
-  } catch (error) {
-    // Handle potential duplicate key error for classCode
-    if (error.code === 11000 && error.keyPattern?.classCode) {
-        return next(new AppError(`Class code '${error.keyValue.classCode}' already exists.`, 409)); // 409 Conflict
-    }
-    if (error.name === 'ValidationError') {
-        return next(new AppError(error.message, 400));
-    }
-    console.error("Error registering class:", error); // Log the actual error
-    next(new AppError("Failed to register class", 500));
-  }
 };
 
 // this is an important function for auto listening the route of the student side properly 
@@ -1211,56 +1201,81 @@ export const getStudentTotalAttendance = asyncHandler(async (req, res) => {
 
 export const joinClass = async (req, res, next) => {
   try {
-    const { classId } = req.params;
-    const { studentId } = req.body;
-    const userId = req.user?.id;
+    const { classPasscode, studentId } = req.body;
+    console.log("=== JOIN CLASS CONTROLLER START ===");
+    console.log("Request Body:", {
+      classPasscode,
+      studentId
+    });
 
-    // Validate inputs
-    if (!mongoose.Types.ObjectId.isValid(classId) || !mongoose.Types.ObjectId.isValid(studentId)) {
-      return next(new AppError("Invalid Class ID or Student ID", 400));
-    }
+    // Find the class with the given passcode
+    const classToJoin = await Class.findOne({ classPasscode });
+    console.log("Class Search Result:", classToJoin ? {
+      _id: classToJoin._id,
+      className: classToJoin.className,
+      studentList: classToJoin.studentList.length
+    } : "No class found");
 
-    // Verify the requesting user is the student trying to join
-    if (userId !== studentId) {
-      return next(new AppError("You can only join classes for yourself", 403));
-    }
-
-    // Find the class
-    const classDoc = await Class.findById(classId);
-    if (!classDoc) {
-      return next(new AppError("Class not found", 404));
+    if (!classToJoin) {
+      console.log("Error: Invalid class passcode");
+      return res.status(404).json({
+        success: false,
+        message: "Invalid class passcode",
+      });
     }
 
     // Check if student is already in the class
-    if (classDoc.studentList.includes(studentId)) {
-      return next(new AppError("You are already enrolled in this class", 400));
+    const isStudentEnrolled = classToJoin.studentList.includes(studentId);
+    console.log("Student Enrollment Check:", {
+      studentId,
+      isAlreadyEnrolled: isStudentEnrolled
+    });
+
+    if (isStudentEnrolled) {
+      console.log("Error: Student already enrolled");
+      return res.status(400).json({
+        success: false,
+        message: "You are already enrolled in this class",
+      });
     }
 
     // Add student to the class
-    classDoc.studentList.push(studentId);
-    await classDoc.save();
+    classToJoin.studentList.push(studentId);
+    const savedClass = await classToJoin.save();
+    console.log("Updated Class:", {
+      _id: savedClass._id,
+      newStudentCount: savedClass.studentList.length,
+      lastAddedStudent: studentId
+    });
 
-    // Update student's class list
-    await User.findByIdAndUpdate(
+    // Add class to student's classId array
+    const updatedStudent = await User.findByIdAndUpdate(
       studentId,
-      { $push: { classId: classId } },
+      { $addToSet: { classId: classToJoin._id } },
       { new: true }
     );
+    console.log("Updated Student:", {
+      _id: updatedStudent._id,
+      classCount: updatedStudent.classId.length,
+      lastAddedClass: classToJoin._id
+    });
 
-    // Populate the updated class with teacher details
-    const populatedClass = await Class.findById(classId)
-      .populate('teacherId', 'fullName email')
-      .populate('studentList', 'fullName email');
-
+    console.log("=== JOIN CLASS CONTROLLER SUCCESS ===");
     res.status(200).json({
       success: true,
       message: "Successfully joined the class",
-      class: populatedClass
+      data: classToJoin,
     });
-
   } catch (error) {
-    console.error("Error joining class:", error);
-    next(new AppError(error.message || "Failed to join class", 500));
+    console.log("=== JOIN CLASS CONTROLLER ERROR ===");
+    console.error("Error Details:", {
+      message: error.message,
+      stack: error.stack
+    });
+    res.status(500).json({
+      success: false,
+      message: error.message || "Failed to join class",
+    });
   }
 };
 
