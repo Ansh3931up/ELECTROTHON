@@ -9,19 +9,17 @@ import { useTheme } from "../context/ThemeContext"; // Import theme context
 import { 
   clearAttendanceError, 
   fetchClassDetails, 
-  generatefrequency,
-  fetchOngoingAttendance
-} from "../redux/slices/classSlice";
-
+  fetchOngoingAttendance,
+  generatefrequency} from "../redux/slices/classSlice";
 import { 
   endAttendance,
-  fetchAttendanceData,
   getSocket, 
   initializeSocket, 
   initiateAttendance, 
   joinClassRoom, 
   leaveClassRoom,
-  markAttendance} from "../utils/socket";
+  markAttendance
+} from "../utils/socket";
 // Import the hook but keep it commented until we fully migrate to it
 // import useAttendanceSocket from "../utils/useAttendanceSocket";
 
@@ -97,10 +95,10 @@ const ClassDetails = () => {
     
     // Check if lecture or lab is active
     const isLectureActive = todayRecord.lecture && 
-      (typeof todayRecord.lecture === 'object' ? todayRecord.lecture.active : false);
+      todayRecord.lecture.active === 'active';
     
     const isLabActive = todayRecord.lab && 
-      (typeof todayRecord.lab === 'object' ? todayRecord.lab.active : false);
+      todayRecord.lab.active === 'active';
     
     const hasActiveSession = isLectureActive || isLabActive;
     const activeSessionType = isLectureActive ? 'lecture' : (isLabActive ? 'lab' : null);
@@ -325,10 +323,10 @@ const ClassDetails = () => {
       
       // Check for active sessions
       const isLectureActive = todayRecord.lecture && 
-        (typeof todayRecord.lecture === 'object' ? todayRecord.lecture.active : false);
+        todayRecord.lecture.active === 'active';
       
       const isLabActive = todayRecord.lab && 
-        (typeof todayRecord.lab === 'object' ? todayRecord.lab.active : false);
+        todayRecord.lab.active === 'active';
       
       console.log("Session status - Lecture:", {hasRecords: hasLectureSession, isActive: isLectureActive});
       console.log("Session status - Lab:", {hasRecords: hasLabSession, isActive: isLabActive});
@@ -508,32 +506,27 @@ const ClassDetails = () => {
         }
       }
       
-      // Show a toast notification to everyone in the class
-      toast.success(`${studentName} marked as ${status}`, {
-        duration: 3000,
-        position: 'bottom-right'
-      });
-      
-      // For students who marked their own attendance, show more prominent feedback
+      // Only show toast notifications based on user role and action source
       if (user?.user?._id === studentId) {
+        // This is the student who marked their own attendance
         toast.success(`Your attendance has been marked as ${status}!`, {
           duration: 5000,
           icon: '✅',
           position: 'top-center'
         });
-        
-        // Refresh the class details after a short delay to show updated attendance
+      } else if (isClassTeacher) {
+        // Teacher sees updates for all students
+        toast.success(`${studentName} marked as ${status}`, {
+          duration: 3000,
+          position: 'bottom-right'
+        });
+      }
+      
+      // Refresh class details after a short delay
+      if (isClassTeacher || user?.user?._id === studentId) {
         setTimeout(() => {
           dispatch(fetchClassDetails(id));
         }, 1000);
-      }
-      
-      // For teachers, also refresh the class details to get updated attendance stats
-      if (user?.user?.role === 'teacher') {
-        // Wait a bit for the backend to process the update
-        setTimeout(() => {
-          dispatch(fetchClassDetails(id));
-        }, 2000);
       }
     });
 
@@ -572,107 +565,41 @@ const ClassDetails = () => {
       return;
     }
     
+    // Check if this session type is already completed
+    if (isSessionCompleted(type)) {
+      toast.error(`${type} attendance for today has already been completed and cannot be modified.`);
+      return;
+    }
+    
     console.log(`Session type selected: ${type}`);
     setCurrentSessionType(type);
-    
-    // Check if there's already attendance recorded for this date and type
-    const today = new Date().toISOString().split('T')[0];
     
     // Show a loading toast
     const loadingToastId = toast.loading("Starting attendance session...");
     
-    // First try to fetch any existing ongoing attendance data for this session type
-    fetchOngoingAttendanceData(type);
+    // Start new attendance session using WebSockets
+    initiateAttendance(
+      currentClass._id, 
+      currentClass.frequency, 
+      user.user._id, 
+      type
+    );
+    
     toast.dismiss(loadingToastId);
     
-    // Rest of the existing function remains the same
-    fetchAttendanceData(currentClass._id, today, type)
-      .then((data) => {
-        toast.dismiss(loadingToastId);
-        
-        if (data.exists && data.data && data.data.records && data.data.records.length > 0) {
-          toast.info(`${type.charAt(0).toUpperCase() + type.slice(1)} attendance records already exist for today`);
-          
-          // Format the data for the UI
-          const existingAttendance = {};
-          data.data.records.forEach(record => {
-            if (record.studentId) {
-              const studentId = typeof record.studentId === 'object' ? record.studentId._id : record.studentId;
-              existingAttendance[studentId] = record.status;
-            }
-          });
-          
-          setCurrentDailyAttendance(existingAttendance);
-          if (currentClass.studentList) {
-            sortStudentList(currentClass.studentList, existingAttendance);
-          }
-          
-          // Explicitly set UI to marking mode
-          setIsMarkingMode(true);
-          setIsSelectingType(false);
-          
-          console.log("Showing existing attendance records with UI in marking mode");
-        } else {
-          // If no existing records, start a new attendance session using WebSockets
-          console.log("No existing records found, starting new attendance session via socket");
-          
-          // Use the teacher:startAttendance event (or use initiateAttendance which now uses this event)
-          initiateAttendance(
-            currentClass._id, 
-            currentClass.frequency, 
-            user.user._id, 
-            type
-          );
-          
-          // We'll let the socket event listeners handle the UI update
-          toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} attendance session started`);
-          
-          // Initialize empty attendance for all students
-          if (currentClass.studentList) {
-            const initialAttendance = {};
-            currentClass.studentList.forEach(student => {
-              initialAttendance[student._id] = "absent";
-            });
-            setCurrentDailyAttendance(initialAttendance);
-            sortStudentList(currentClass.studentList, initialAttendance);
-          }
-          
-          // Explicitly transition UI to marking mode
-          setIsMarkingMode(true);
-          setIsSelectingType(false);
-        }
-      })
-      .catch(error => {
-        toast.dismiss(loadingToastId);
-        console.error("Error checking existing attendance:", error);
-        toast.error("Error checking attendance records. Trying direct method...");
-        
-        // Fall back to using WebSockets directly
-        initiateAttendance(
-          currentClass._id, 
-          currentClass.frequency, 
-          user.user._id, 
-          type
-        );
-        
-        console.log("Direct attendance session started via socket");
-        
-        // Initialize empty attendance for all students
-        if (currentClass.studentList) {
-          const initialAttendance = {};
-          currentClass.studentList.forEach(student => {
-            initialAttendance[student._id] = "absent";
-          });
-          setCurrentDailyAttendance(initialAttendance);
-          sortStudentList(currentClass.studentList, initialAttendance);
-        }
-        
-        // Explicitly transition UI to marking mode
-        setIsMarkingMode(true);
-        setIsSelectingType(false);
-        
-        toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} attendance session started`);
+    // Initialize empty attendance for all students
+    if (currentClass.studentList) {
+      const initialAttendance = {};
+      currentClass.studentList.forEach(student => {
+        initialAttendance[student._id] = "absent";
       });
+      setCurrentDailyAttendance(initialAttendance);
+      sortStudentList(currentClass.studentList, initialAttendance);
+    }
+    
+    // Transition UI to marking mode
+    setIsMarkingMode(true);
+    setIsSelectingType(false);
   };
 
   // Handle manual attendance state updates and emit socket event
@@ -694,6 +621,7 @@ const ClassDetails = () => {
     sortStudentList(currentClass.studentList, updatedAttendance);
     
     // Send the attendance update via socket
+    // Note: We don't show a toast here as it will come back through the socket event
     markAttendance(
       currentClass._id,
       studentId,
@@ -753,7 +681,7 @@ const ClassDetails = () => {
       if (isOffline) {
         setShowSMSForm(true);
         setClassFrequencies(prev => ({ ...prev, [currentClassId]: newFrequency }));
-        storeOfflineFrequency(newFrequency);
+        toast.warning('Offline mode: Frequency stored locally');
       } else {
         // Show loading toast
         const loadingToastId = toast.loading("Generating frequency...");
@@ -814,16 +742,11 @@ const ClassDetails = () => {
 
   const handleSendSMS = async () => {
     if (!studentPhone || !currentClass?._id) return;
-    const currentClassId = currentClass._id;
-
-    const frequency = classFrequencies[currentClassId];
-    const success = await sendFrequencySMS(frequency, studentPhone);
     
-    if (success) {
-      setShowSMSForm(false);
-      setStudentPhone("");
-      // setSelectedClassId(null); // Not needed
-    }
+    // Since SMS functionality is not implemented, we'll just close the form and show a message
+    toast.info('SMS functionality is not implemented yet');
+    setShowSMSForm(false);
+    setStudentPhone("");
   };
 
   const togglePlaySound = () => {
@@ -904,7 +827,23 @@ const ClassDetails = () => {
     setShowFrequencyPopup(false);
   };
 
-  // Updated to save attendance and end the session using sockets when needed
+  // Add this function to check if a session is completed
+  const isSessionCompleted = (sessionType) => {
+    if (!currentClass?.attendanceRecords) return false;
+    
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    
+    const todayRecord = currentClass.attendanceRecords.find(record => {
+      const recordDate = new Date(record.date);
+      recordDate.setUTCHours(0, 0, 0, 0);
+      return recordDate.getTime() === today.getTime();
+    });
+    
+    return todayRecord && todayRecord[sessionType] && todayRecord[sessionType].active === 'completed';
+  };
+
+  // Modify the saveAttendance function
   const saveAttendance = async () => {
     if (!currentClass?._id || !currentSessionType || Object.keys(currentDailyAttendance).length === 0 || attendanceSaving) return;
     const currentClassId = currentClass._id;
@@ -913,31 +852,7 @@ const ClassDetails = () => {
       // Show loading toast
       const loadingToastId = toast.loading("Saving attendance...");
       
-      // Mark each student's attendance individually using WebSockets
-      const savedPromises = Object.entries(currentDailyAttendance).map(async ([studentId, status]) => {
-        try {
-          // Find student name for the notification
-          const student = currentClass.studentList.find(s => s._id === studentId);
-          const studentName = student ? student.fullName : 'Unknown Student';
-          
-          // Use markAttendance from socket utils
-          return markAttendance(
-            currentClassId,
-            studentId,
-            studentName,
-            status,
-            currentSessionType
-          );
-        } catch (err) {
-          console.error(`Error marking attendance for student ${studentId}:`, err);
-          return false;
-        }
-      });
-      
-      // Wait for all attendance marks to be processed
-      await Promise.all(savedPromises);
-      
-      // End the attendance session
+      // End the attendance session first
       endAttendance(
         currentClassId,
         user.user._id,
@@ -947,78 +862,11 @@ const ClassDetails = () => {
       toast.dismiss(loadingToastId);
       toast.success('Attendance saved successfully!');
       
-      // Check if there's another session type to mark
-      const today = new Date().toISOString().split('T')[0];
-      const todayRecord = currentClass.attendanceRecords?.find(record => {
-        const recordDate = new Date(record.date).toISOString().split('T')[0];
-        return recordDate === today;
-      });
-      
-      // Determine if both lecture and lab are completed
-      const hasCompletedLecture = todayRecord?.lecture && 
-        ((todayRecord.lecture.records && todayRecord.lecture.records.length > 0) || 
-         (Array.isArray(todayRecord.lecture) && todayRecord.lecture.length > 0));
-      
-      const hasCompletedLab = todayRecord?.lab && 
-        ((todayRecord.lab.records && todayRecord.lab.records.length > 0) || 
-         (Array.isArray(todayRecord.lab) && todayRecord.lab.length > 0));
-      
-      const hasCompletedBoth = hasCompletedLecture && hasCompletedLab;
-      
-      if (hasCompletedBoth) {
-        // If both sessions are recorded, reset UI state completely
-        setIsMarkingMode(false);
-        setIsSelectingType(false);
-        setCurrentSessionType(null);
-        setCurrentDailyAttendance({});
-      } else {
-        // If we've just recorded one type, check if we should offer the other
-        const otherType = currentSessionType === 'lecture' ? 'lab' : 'lecture';
-        
-        // Only prompt if the other session hasn't been marked yet
-        const hasOtherSession = (otherType === 'lecture' ? hasCompletedLecture : hasCompletedLab);
-        
-        if (!hasOtherSession) {
-          const shouldContinue = confirm(`Would you like to mark attendance for ${otherType} session now?`);
-          
-          if (shouldContinue) {
-            // Start marking the other session type using WebSockets
-            initiateAttendance(
-              currentClassId,
-              currentClass.frequency,
-              user.user._id,
-              otherType
-            );
-            
-            // Initialize with empty attendance
-            if (currentClass?.studentList) {
-              const initialAttendance = {};
-              currentClass.studentList.forEach(student => {
-                initialAttendance[student._id] = "absent";
-              });
-              setCurrentDailyAttendance(initialAttendance);
-              sortStudentList(currentClass.studentList, initialAttendance);
-            }
-            
-            // Update UI state
-            setCurrentSessionType(otherType);
-            setIsMarkingMode(true);
-            setIsSelectingType(false);
-          } else {
-            // User declined, reset UI state
-            setIsMarkingMode(false);
-            setIsSelectingType(false);
-            setCurrentSessionType(null);
-            setCurrentDailyAttendance({});
-          }
-        } else {
-          // Reset UI state
-          setIsMarkingMode(false);
-          setIsSelectingType(false);
-          setCurrentSessionType(null);
-          setCurrentDailyAttendance({});
-        }
-      }
+      // Reset UI state
+      setIsMarkingMode(false);
+      setIsSelectingType(false);
+      setCurrentSessionType(null);
+      setCurrentDailyAttendance({});
       
       // Refresh class details
       dispatch(fetchClassDetails(id));
@@ -1036,7 +884,8 @@ const ClassDetails = () => {
     const today = new Date().toISOString().split('T')[0];
     return currentClass.attendanceRecords.some(record => {
       const recordDate = new Date(record.date).toISOString().split('T')[0];
-      return recordDate === today && record.active;
+      return recordDate === today && 
+        (record.lecture?.active === 'active' || record.lab?.active === 'active');
     });
   };
 
@@ -1047,6 +896,9 @@ const ClassDetails = () => {
     
     // Determine final status - giving priority to real-time updates
     const studentStatus = realTimeAttendance[student._id]?.status || currentDailyAttendance[student._id] || 'absent';
+    
+    // Check if the current session is completed
+    const isSessionComplete = isSessionCompleted(currentSessionType);
     
     return (
       <div key={student._id} className={`flex items-center justify-between px-3 py-2.5 gap-3 ${
@@ -1065,8 +917,8 @@ const ClassDetails = () => {
               <span className="ml-2 h-2 w-2 rounded-full bg-green-500"></span>
             )}
             
-            {/* Real-time attendance indicator */}
-            {hasMarkedAttendance && (
+            {/* Real-time attendance indicator - only show for students */}
+            {hasMarkedAttendance && !isClassTeacher && (
               <span className={`ml-2 text-xs px-1 py-0.5 rounded ${
                 isDarkMode ? 'bg-green-800 text-green-200' : 'bg-green-100 text-green-800'
               }`}>
@@ -1087,6 +939,8 @@ const ClassDetails = () => {
                   : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-100 focus:ring-green-500'
             } ${isDarkMode ? 'focus:ring-offset-gray-800' : 'focus:ring-offset-white'}`}
             onClick={() => handleAttendanceChange(student._id, 'present')}
+            // Disable if session is complete or if student has marked themselves present (for non-teachers)
+            disabled={isSessionComplete || (!isClassTeacher && hasMarkedAttendance)}
           >
             Present
           </button>
@@ -1100,7 +954,8 @@ const ClassDetails = () => {
                   : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-100 focus:ring-red-500'
             } ${isDarkMode ? 'focus:ring-offset-gray-800' : 'focus:ring-offset-white'}`}
             onClick={() => handleAttendanceChange(student._id, 'absent')}
-            disabled={realTimeAttendance[student._id]?.status === 'present'}
+            // Disable if session is complete or if student has marked themselves present (for non-teachers)
+            disabled={isSessionComplete || (!isClassTeacher && hasMarkedAttendance)}
           >
             Absent
           </button>

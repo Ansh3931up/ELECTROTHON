@@ -47,15 +47,17 @@ const dailyAttendanceSchema = new mongoose.Schema({
     lecture: {
         records: [studentAttendanceStatusSchema], // Attendance list for lecture
         active: {
-            type: Boolean,
-            default: true // Active by default when created
+            type: String,
+            enum: ['initial', 'active', 'completed'],
+            default: 'initial'
         }
     },
     lab: {
         records: [studentAttendanceStatusSchema], // Attendance list for lab
         active: {
-            type: Boolean,
-            default: true // Active by default when created
+            type: String,
+            enum: ['initial', 'active', 'completed'],
+            default: 'initial'
         }
     }
 }, { _id: true }); // Give daily records their own _id

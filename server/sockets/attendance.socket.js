@@ -116,29 +116,66 @@ export const handleAttendanceSocket = (socket, io) => {
       const today = new Date();
       today.setUTCHours(0, 0, 0, 0);
 
-      // Find attendance record for today or create new one
+      // Find attendance record for today
       let attendanceRecord = classDoc.attendanceRecords.find(record => {
         const recordDate = new Date(record.date);
         recordDate.setUTCHours(0, 0, 0, 0);
         return recordDate.getTime() === today.getTime();
       });
 
-      if (!attendanceRecord) {
-        // Create new attendance record for today
-        attendanceRecord = {
-          date: today,
-          lecture: { records: [], active: sessionType === 'lecture' },
-          lab: { records: [], active: sessionType === 'lab' }
-        };
-        classDoc.attendanceRecords.push(attendanceRecord);
-      } else {
-        // Update existing record
-        attendanceRecord[sessionType].active = true;
+      // Check if there's already an active session
+      if (attendanceRecord) {
+        // Check if the requested session type is already completed
+        if (attendanceRecord[sessionType] && attendanceRecord[sessionType].active === 'completed') {
+          socket.emit('attendance:error', { 
+            message: `${sessionType} attendance for today has already been completed and cannot be modified.`
+          });
+          return;
+        }
       }
 
-      // Set frequency if provided
-      if (Array.isArray(frequency) && frequency.length > 0) {
-        classDoc.frequency = frequency;
+      if (!attendanceRecord) {
+        // Create new attendance record for today with initial state
+        const newRecord = {
+          date: today,
+          lecture: { 
+            records: [], 
+            active: sessionType === 'lecture' ? 'active' : 'initial'
+          },
+          lab: { 
+            records: [], 
+            active: sessionType === 'lab' ? 'active' : 'initial'
+          }
+        };
+        classDoc.attendanceRecords.push(newRecord);
+        attendanceRecord = classDoc.attendanceRecords[classDoc.attendanceRecords.length - 1];
+      } else {
+        // Update existing record - set active state for the requested session
+        if (!attendanceRecord[sessionType]) {
+          attendanceRecord[sessionType] = {
+            records: [],
+            active: 'active'
+          };
+        } else {
+          attendanceRecord[sessionType].active = 'active';
+        }
+      }
+
+      // Mark all students as absent initially
+      const studentList = classDoc.studentList || [];
+      for (const studentId of studentList) {
+        const existingRecordIndex = attendanceRecord[sessionType].records.findIndex(
+          record => record.studentId.toString() === studentId.toString()
+        );
+
+        if (existingRecordIndex === -1) {
+          attendanceRecord[sessionType].records.push({
+            studentId: new mongoose.Types.ObjectId(studentId),
+            status: 'absent',
+            recordedAt: new Date(),
+            recordedBy: new mongoose.Types.ObjectId(teacherId)
+          });
+        }
       }
 
       await classDoc.save();
@@ -167,21 +204,15 @@ export const handleAttendanceSocket = (socket, io) => {
     }
   });
 
-  // Student marks attendance (using new naming convention)
-  socket.on('student:markAttendance', async (data) => {
+  // Student marks attendance
+  socket.on('attendanceMarked', async ({ classId, studentId, studentName, status, sessionType }) => {
     try {
-      console.log('Received student:markAttendance event:', data);
-      
-      // Extract required parameters
-      const { classId, studentId, studentName, status = 'present', sessionType } = data;
-      
-      if (!classId || !studentId || !sessionType) {
-        console.error('student:markAttendance: Missing required parameters');
+      if (!classId || !studentId || !status || !sessionType) {
+        console.error('attendanceMarked: Missing required parameters');
         socket.emit('attendance:error', { message: 'Missing required parameters' });
         return;
       }
-      
-      // Process exactly like attendanceMarked handler
+
       console.log(`Student ${studentId} marked attendance as ${status} in class ${classId} for ${sessionType}`);
       
       // Find the class
@@ -201,7 +232,7 @@ export const handleAttendanceSocket = (socket, io) => {
         return recordDate.getTime() === today.getTime();
       });
 
-      if (!attendanceRecord || !attendanceRecord[sessionType].active) {
+      if (!attendanceRecord || !attendanceRecord[sessionType]?.active) {
         socket.emit('attendance:error', { message: 'No active attendance session for this class and session type' });
         return;
       }
@@ -242,8 +273,9 @@ export const handleAttendanceSocket = (socket, io) => {
         sessionType,
         timestamp: new Date().toISOString()
       });
+
     } catch (error) {
-      console.error('Error in student:markAttendance:', error);
+      console.error('Error marking attendance:', error);
       socket.emit('attendance:error', { 
         message: error.message || 'Failed to mark attendance'
       });
@@ -302,13 +334,16 @@ export const handleAttendanceSocket = (socket, io) => {
         // Create new attendance record for today
         attendanceRecord = {
           date: today,
-          lecture: { records: [], active: sessionType === 'lecture' },
-          lab: { records: [], active: sessionType === 'lab' }
+          lecture: { records: [], active: sessionType === 'lecture' ? 'active' : 'initial' },
+          lab: { records: [], active: sessionType === 'lab' ? 'active' : 'initial' }
         };
         classDoc.attendanceRecords.push(attendanceRecord);
       } else {
         // Update existing record
-        attendanceRecord[sessionType].active = true;
+        attendanceRecord[sessionType] = {
+          records: attendanceRecord[sessionType]?.records || [],
+          active: 'active'
+        };
       }
 
       // Set frequency if provided
@@ -389,17 +424,21 @@ export const handleAttendanceSocket = (socket, io) => {
         return recordDate.getTime() === today.getTime();
       });
 
-      if (attendanceRecord && attendanceRecord[sessionType]) {
-        attendanceRecord[sessionType].active = false;
-        await classDoc.save();
+      if (!attendanceRecord || !attendanceRecord[sessionType]) {
+        socket.emit('attendance:error', { message: 'No attendance record found for this session' });
+        return;
       }
+
+      // Set active to completed to indicate session is completed
+      attendanceRecord[sessionType].active = 'completed';
+      await classDoc.save();
 
       // Broadcast to all users in the class
       io.to(`class:${classId}`).emit('attendanceEnded', {
         classId,
         sessionType,
         timestamp: new Date().toISOString(),
-        message: `Attendance for ${sessionType} has ended`
+        message: `Attendance for ${sessionType} has been completed`
       });
 
       socket.emit('attendance:ended', { 
@@ -412,84 +451,6 @@ export const handleAttendanceSocket = (socket, io) => {
       console.error('Error in teacher:endAttendance:', error);
       socket.emit('attendance:error', { 
         message: error.message || 'Failed to end attendance session'
-      });
-    }
-  });
-
-  // Student marks attendance
-  socket.on('attendanceMarked', async ({ classId, studentId, studentName, status, sessionType }) => {
-    try {
-      if (!classId || !studentId || !status || !sessionType) {
-        console.error('attendanceMarked: Missing required parameters');
-        socket.emit('attendance:error', { message: 'Missing required parameters' });
-        return;
-      }
-
-      console.log(`Student ${studentId} marked attendance as ${status} in class ${classId} for ${sessionType}`);
-      
-      // Find the class
-      const classDoc = await Class.findById(classId);
-      if (!classDoc) {
-        socket.emit('attendance:error', { message: 'Class not found' });
-        return;
-      }
-
-      const today = new Date();
-      today.setUTCHours(0, 0, 0, 0);
-
-      // Find attendance record for today
-      const attendanceRecord = classDoc.attendanceRecords.find(record => {
-        const recordDate = new Date(record.date);
-        recordDate.setUTCHours(0, 0, 0, 0);
-        return recordDate.getTime() === today.getTime();
-      });
-
-      if (!attendanceRecord || !attendanceRecord[sessionType].active) {
-        socket.emit('attendance:error', { message: 'No active attendance session for this class and session type' });
-        return;
-      }
-
-      // Check if student is already marked
-      const existingRecordIndex = attendanceRecord[sessionType].records.findIndex(
-        record => record.studentId.toString() === studentId
-      );
-
-      const recordedBy = socket.userData?.role === 'teacher' ? socket.userData.userId : classDoc.teacherId;
-
-      if (existingRecordIndex !== -1) {
-        // Update existing record
-        attendanceRecord[sessionType].records[existingRecordIndex] = {
-          studentId: new mongoose.Types.ObjectId(studentId),
-          status,
-          recordedAt: new Date(),
-          recordedBy: new mongoose.Types.ObjectId(recordedBy)
-        };
-      } else {
-        // Add new record
-        attendanceRecord[sessionType].records.push({
-          studentId: new mongoose.Types.ObjectId(studentId),
-          status,
-          recordedAt: new Date(),
-          recordedBy: new mongoose.Types.ObjectId(recordedBy)
-        });
-      }
-
-      await classDoc.save();
-      
-      // Broadcast to all users in the class
-      io.to(`class:${classId}`).emit('attendanceUpdate', {
-        classId,
-        studentId,
-        studentName,
-        status,
-        sessionType,
-        timestamp: new Date().toISOString()
-      });
-
-    } catch (error) {
-      console.error('Error marking attendance:', error);
-      socket.emit('attendance:error', { 
-        message: error.message || 'Failed to mark attendance'
       });
     }
   });
@@ -537,7 +498,7 @@ export const handleAttendanceSocket = (socket, io) => {
       });
 
       if (attendanceRecord && attendanceRecord[sessionType]) {
-        attendanceRecord[sessionType].active = false;
+        attendanceRecord[sessionType].active = 'completed';
         await classDoc.save();
       }
 
@@ -546,7 +507,7 @@ export const handleAttendanceSocket = (socket, io) => {
         classId,
         sessionType,
         timestamp: new Date().toISOString(),
-        message: `Attendance for ${sessionType} has ended`
+        message: `Attendance for ${sessionType} has been completed`
       });
 
       socket.emit('attendance:ended', { 
