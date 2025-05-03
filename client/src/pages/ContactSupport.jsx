@@ -20,7 +20,7 @@ const ContactSupport = () => {
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
-const API_URL = "http://localhost:5014/api/v1" + "/support";
+const API_URL = "https://electrothon.onrender.com/api/v1" + "/support";
   
   const handleSubmit = async (e) => {
     e.preventDefault();
