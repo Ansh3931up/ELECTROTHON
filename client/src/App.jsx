@@ -21,7 +21,7 @@ import SplashScreen from './pages/SplashScreen';
 import Student from './pages/student';
 import StudentAttendance from "./pages/StudentAttendance";
 import StudentFindClasses from './pages/StudentFindClasses';
-import Teacher from './pages/Teacher';
+import Teacher from './pages/Teacher'; //teacher page
 import TeacherHome from "./pages/TeacherHome";
 import TeacherTimetable from './pages/TeacherTimetable';
 
