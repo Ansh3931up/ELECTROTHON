@@ -1,6 +1,50 @@
 import Class from "../models/class.model.js";
 import mongoose from "mongoose";
 
+// Utility function to find or create today's attendance record (UTC)
+function findOrCreateTodayAttendanceRecord(classDoc) {
+  const now = new Date();
+  const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  
+  // First check if we already have a record for today
+  let todayRecord = classDoc.attendanceRecords.find(record => {
+    const recordDate = new Date(record.date);
+    const recordDateUTC = new Date(Date.UTC(recordDate.getUTCFullYear(), recordDate.getUTCMonth(), recordDate.getUTCDate()));
+    return recordDateUTC.getTime() === todayUTC.getTime();
+  });
+
+  // If no record exists, create a new one
+  if (!todayRecord) {
+    todayRecord = {
+      date: todayUTC,
+      lecture: { records: [], active: 'initial' },
+      lab: { records: [], active: 'initial' }
+    };
+    classDoc.attendanceRecords.push(todayRecord);
+  }
+
+  // Ensure the record has the correct structure
+  if (!todayRecord.lecture) {
+    todayRecord.lecture = { records: [], active: 'initial' };
+  }
+  if (!todayRecord.lab) {
+    todayRecord.lab = { records: [], active: 'initial' };
+  }
+
+  return todayRecord;
+}
+
+// Utility function to find today's attendance record (do not create)
+function findTodayAttendanceRecord(classDoc) {
+  const now = new Date();
+  const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  return classDoc.attendanceRecords.find(record => {
+    const recordDate = new Date(record.date);
+    const recordDateUTC = new Date(Date.UTC(recordDate.getUTCFullYear(), recordDate.getUTCMonth(), recordDate.getUTCDate()));
+    return recordDateUTC.getTime() === todayUTC.getTime();
+  });
+}
+
 export const handleAttendanceSocket = (socket, io) => {
   console.log(`Socket connected for attendance handling: ${socket.id}`);
 
@@ -89,86 +133,43 @@ export const handleAttendanceSocket = (socket, io) => {
         socket.emit('attendance:error', { message: 'Missing required parameters' });
         return;
       }
-
-      // Verify the user is a teacher
       if (socket.userData?.role !== 'teacher') {
-        socket.emit('attendance:error', { 
-          message: 'Only teachers can initiate attendance'
-        });
+        socket.emit('attendance:error', { message: 'Only teachers can initiate attendance' });
         return;
       }
-
-      console.log(`Teacher ${teacherId} initiated attendance in class ${classId} for ${sessionType}`);
-      
-      // Find the class
       const classDoc = await Class.findById(classId);
       if (!classDoc) {
         socket.emit('attendance:error', { message: 'Class not found' });
         return;
       }
-
-      // Check if teacher owns this class
       if (classDoc.teacherId.toString() !== teacherId) {
         socket.emit('attendance:error', { message: 'Not authorized to manage this class' });
         return;
       }
 
-      const today = new Date();
-      today.setUTCHours(0, 0, 0, 0);
+      // Use utility to find or create today's record
+      let attendanceRecord = findOrCreateTodayAttendanceRecord(classDoc);
 
-      // Find attendance record for today
-      let attendanceRecord = classDoc.attendanceRecords.find(record => {
-        const recordDate = new Date(record.date);
-        recordDate.setUTCHours(0, 0, 0, 0);
-        return recordDate.getTime() === today.getTime();
-      });
-
-      // Check if there's already an active session
-      if (attendanceRecord) {
-        // Check if the requested session type is already completed
-        if (attendanceRecord[sessionType] && attendanceRecord[sessionType].active === 'completed') {
-          socket.emit('attendance:error', { 
-            message: `${sessionType} attendance for today has already been completed and cannot be modified.`
-          });
-          return;
-        }
+      // Check if the requested session type is already completed
+      if (attendanceRecord[sessionType] && attendanceRecord[sessionType].active === 'completed') {
+        socket.emit('attendance:error', { message: `${sessionType} attendance for today has already been completed and cannot be modified.` });
+        return;
       }
 
-      if (!attendanceRecord) {
-        // Create new attendance record for today with initial state
-        const newRecord = {
-          date: today,
-          lecture: { 
-            records: [], 
-            active: sessionType === 'lecture' ? 'active' : 'initial'
-          },
-          lab: { 
-            records: [], 
-            active: sessionType === 'lab' ? 'active' : 'initial'
-          }
-        };
-        classDoc.attendanceRecords.push(newRecord);
-        attendanceRecord = classDoc.attendanceRecords[classDoc.attendanceRecords.length - 1];
-      } else {
-        // Update existing record - set active state for the requested session
-        if (!attendanceRecord[sessionType]) {
-          attendanceRecord[sessionType] = {
-            records: [],
-            active: 'active'
-          };
-        } else {
-          attendanceRecord[sessionType].active = 'active';
-        }
+      // Check if the session is already active
+      if (attendanceRecord[sessionType] && attendanceRecord[sessionType].active === 'active') {
+        socket.emit('attendance:error', { message: `${sessionType} attendance is already active.` });
+        return;
       }
-
-      // Mark all students as absent initially
-      const studentList = classDoc.studentList || [];
-      for (const studentId of studentList) {
-        const existingRecordIndex = attendanceRecord[sessionType].records.findIndex(
-          record => record.studentId.toString() === studentId.toString()
-        );
-
-        if (existingRecordIndex === -1) {
+      console.log("attendanceRecord",attendanceRecord);
+      // Update existing record - set active state for the requested session
+      attendanceRecord[sessionType].active = 'active';
+      console.log("attendanceRecord",attendanceRecord);
+      // Mark all students as absent initially only if there are no existing 
+      console.log("attendanceRecord[sessionType].records",attendanceRecord[sessionType].records);
+      if (!attendanceRecord[sessionType].records || attendanceRecord[sessionType].records.length === 0) {
+        const studentList = classDoc.studentList || [];
+        for (const studentId of studentList) {
           attendanceRecord[sessionType].records.push({
             studentId: new mongoose.Types.ObjectId(studentId),
             status: 'absent',
@@ -176,11 +177,15 @@ export const handleAttendanceSocket = (socket, io) => {
             recordedBy: new mongoose.Types.ObjectId(teacherId)
           });
         }
+        console.log(`[initiateAttendance] After marking all students absent:`, attendanceRecord[sessionType].records);
       }
-
+      // Debug: Check if records array is empty after this block
+      if (!attendanceRecord[sessionType].records || attendanceRecord[sessionType].records.length === 0) {
+        console.warn(`[initiateAttendance] WARNING: records array is still empty after initialization for ${sessionType}`);
+      }
+      console.log("attendanceRecord",attendanceRecord);
       await classDoc.save();
-      
-      // Broadcast to all students in the class
+      console.log("attendanceRecord",attendanceRecord);
       io.to(`class:${classId}`).emit('attendanceStarted', {
         classId,
         teacherId,
@@ -188,19 +193,15 @@ export const handleAttendanceSocket = (socket, io) => {
         timestamp: new Date().toISOString(),
         message: `Attendance check initiated for ${sessionType}`
       });
-
       socket.emit('attendance:initiated', { 
         success: true,
         classId,
         sessionType,
         message: `Attendance for ${sessionType} initiated successfully`
       });
-
     } catch (error) {
       console.error('Error initiating attendance:', error);
-      socket.emit('attendance:error', { 
-        message: error.message || 'Failed to initiate attendance'
-      });
+      socket.emit('attendance:error', { message: error.message || 'Failed to initiate attendance' });
     }
   });
 
@@ -222,14 +223,15 @@ export const handleAttendanceSocket = (socket, io) => {
         return;
       }
 
-      const today = new Date();
-      today.setUTCHours(0, 0, 0, 0);
+      // Always use UTC midnight for today
+      const todayUTC = new Date();
+      todayUTC.setUTCHours(0, 0, 0, 0);
 
       // Find attendance record for today
       const attendanceRecord = classDoc.attendanceRecords.find(record => {
         const recordDate = new Date(record.date);
         recordDate.setUTCHours(0, 0, 0, 0);
-        return recordDate.getTime() === today.getTime();
+        return recordDate.getTime() === todayUTC.getTime();
       });
 
       if (!attendanceRecord || !attendanceRecord[sessionType]?.active) {
@@ -286,74 +288,64 @@ export const handleAttendanceSocket = (socket, io) => {
   socket.on('teacher:startAttendance', async (data) => {
     try {
       console.log('Received teacher:startAttendance event:', data);
-      
-      // Extract required parameters
       const { classId, teacherId, sessionType, frequency } = data;
-      
-      // Process the same as initiateAttendance
       if (!classId || !teacherId || !sessionType) {
         console.error('teacher:startAttendance: Missing required parameters');
         socket.emit('attendance:error', { message: 'Missing required parameters' });
         return;
       }
-
-      // Verify the user is a teacher
       if (socket.userData?.role !== 'teacher') {
-        socket.emit('attendance:error', { 
-          message: 'Only teachers can initiate attendance'
-        });
+        socket.emit('attendance:error', { message: 'Only teachers can initiate attendance' });
         return;
       }
+      console.log("teacher:startAttendance",{ classId, teacherId, sessionType, frequency });
 
-      console.log(`Teacher ${teacherId} initiated attendance in class ${classId} for ${sessionType}`);
-      
-      // Find the class
       const classDoc = await Class.findById(classId);
       if (!classDoc) {
         socket.emit('attendance:error', { message: 'Class not found' });
         return;
       }
-
-      // Check if teacher owns this class
       if (classDoc.teacherId.toString() !== teacherId) {
         socket.emit('attendance:error', { message: 'Not authorized to manage this class' });
         return;
       }
 
-      const today = new Date();
-      today.setUTCHours(0, 0, 0, 0);
-
-      // Find attendance record for today or create new one
-      let attendanceRecord = classDoc.attendanceRecords.find(record => {
-        const recordDate = new Date(record.date);
-        recordDate.setUTCHours(0, 0, 0, 0);
-        return recordDate.getTime() === today.getTime();
-      });
-
+      // Use utility to find today's record (do NOT create)
+      let attendanceRecord = findTodayAttendanceRecord(classDoc);
       if (!attendanceRecord) {
-        // Create new attendance record for today
-        attendanceRecord = {
-          date: today,
-          lecture: { records: [], active: sessionType === 'lecture' ? 'active' : 'initial' },
-          lab: { records: [], active: sessionType === 'lab' ? 'active' : 'initial' }
-        };
-        classDoc.attendanceRecords.push(attendanceRecord);
-      } else {
-        // Update existing record
-        attendanceRecord[sessionType] = {
-          records: attendanceRecord[sessionType]?.records || [],
-          active: 'active'
-        };
+        socket.emit('attendance:error', { message: 'No attendance session has been initialized for today. Please use the "initiateAttendance" action first.' });
+        return;
       }
 
+      // Check if the requested session type is already completed
+      if (attendanceRecord[sessionType] && attendanceRecord[sessionType].active === 'completed') {
+        socket.emit('attendance:error', { message: `${sessionType} attendance for today has already been completed and cannot be modified.` });
+        return;
+      }
+      // Check if the session is already active
+      if (attendanceRecord[sessionType] && attendanceRecord[sessionType].active === 'active') {
+        socket.emit('attendance:error', { message: `${sessionType} attendance is already active.` });
+        return;
+      }
+      // Update existing record - set active state for the requested session
+      attendanceRecord[sessionType].active = 'active';
+      // Mark all students as absent initially only if there are no existing records
+      if (!attendanceRecord[sessionType].records || attendanceRecord[sessionType].records.length === 0) {
+        const studentList = classDoc.studentList || [];
+        for (const studentId of studentList) {
+          attendanceRecord[sessionType].records.push({
+            studentId: new mongoose.Types.ObjectId(studentId),
+            status: 'absent',
+            recordedAt: new Date(),
+            recordedBy: new mongoose.Types.ObjectId(teacherId)
+          });
+        }
+      }
       // Set frequency if provided
       if (Array.isArray(frequency) && frequency.length > 0) {
         classDoc.frequency = frequency;
       }
-
       await classDoc.save();
-      
-      // Broadcast to all students in the class
       io.to(`class:${classId}`).emit('attendanceStarted', {
         classId,
         teacherId,
@@ -361,7 +353,6 @@ export const handleAttendanceSocket = (socket, io) => {
         timestamp: new Date().toISOString(),
         message: `Attendance check initiated for ${sessionType}`
       });
-
       socket.emit('attendance:initiated', { 
         success: true,
         classId,
@@ -370,9 +361,7 @@ export const handleAttendanceSocket = (socket, io) => {
       });
     } catch (error) {
       console.error('Error in teacher:startAttendance:', error);
-      socket.emit('attendance:error', { 
-        message: error.message || 'Failed to initiate attendance'
-      });
+      socket.emit('attendance:error', { message: error.message || 'Failed to initiate attendance' });
     }
   });
   
@@ -380,59 +369,34 @@ export const handleAttendanceSocket = (socket, io) => {
   socket.on('teacher:endAttendance', async (data) => {
     try {
       console.log('Received teacher:endAttendance event:', data);
-      
-      // Extract required parameters
       const { classId, teacherId, sessionType } = data;
-      
-      // Process the same as endAttendance
       if (!classId || !teacherId || !sessionType) {
         console.error('teacher:endAttendance: Missing required parameters');
         socket.emit('attendance:error', { message: 'Missing required parameters' });
         return;
       }
-
-      // Verify the user is a teacher
       if (socket.userData?.role !== 'teacher') {
-        socket.emit('attendance:error', { 
-          message: 'Only teachers can end attendance sessions'
-        });
+        socket.emit('attendance:error', { message: 'Only teachers can end attendance sessions' });
         return;
       }
-
-      console.log(`Teacher ${teacherId} ending attendance in class ${classId} for ${sessionType}`);
-      
-      // Find the class
       const classDoc = await Class.findById(classId);
       if (!classDoc) {
         socket.emit('attendance:error', { message: 'Class not found' });
         return;
       }
-
-      // Check if teacher owns this class
       if (classDoc.teacherId.toString() !== teacherId) {
         socket.emit('attendance:error', { message: 'Not authorized to manage this class' });
         return;
       }
-
-      const today = new Date();
-      today.setUTCHours(0, 0, 0, 0);
-
-      // Find attendance record for today
-      const attendanceRecord = classDoc.attendanceRecords.find(record => {
-        const recordDate = new Date(record.date);
-        recordDate.setUTCHours(0, 0, 0, 0);
-        return recordDate.getTime() === today.getTime();
-      });
-
+      // Always use UTC midnight for today, but do NOT create a new record
+      const attendanceRecord = findTodayAttendanceRecord(classDoc);
       if (!attendanceRecord || !attendanceRecord[sessionType]) {
         socket.emit('attendance:error', { message: 'No attendance record found for this session' });
         return;
       }
-
       // Set active to completed to indicate session is completed
       attendanceRecord[sessionType].active = 'completed';
       await classDoc.save();
-
       // Broadcast to all users in the class
       io.to(`class:${classId}`).emit('attendanceEnded', {
         classId,
@@ -440,18 +404,16 @@ export const handleAttendanceSocket = (socket, io) => {
         timestamp: new Date().toISOString(),
         message: `Attendance for ${sessionType} has been completed`
       });
-
-      socket.emit('attendance:ended', { 
+      // Notify the teacher's client to navigate away
+      socket.emit('attendance:endedAndNavigate', {
         success: true,
         classId,
         sessionType,
-        message: `Attendance for ${sessionType} ended successfully`
+        message: `Attendance for ${sessionType} ended successfully, navigate away.`
       });
     } catch (error) {
       console.error('Error in teacher:endAttendance:', error);
-      socket.emit('attendance:error', { 
-        message: error.message || 'Failed to end attendance session'
-      });
+      socket.emit('attendance:error', { message: error.message || 'Failed to end attendance session' });
     }
   });
 
@@ -463,65 +425,41 @@ export const handleAttendanceSocket = (socket, io) => {
         socket.emit('attendance:error', { message: 'Missing required parameters' });
         return;
       }
-
-      // Verify the user is a teacher
       if (socket.userData?.role !== 'teacher') {
-        socket.emit('attendance:error', { 
-          message: 'Only teachers can end attendance sessions'
-        });
+        socket.emit('attendance:error', { message: 'Only teachers can end attendance sessions' });
         return;
       }
-
-      console.log(`Teacher ${teacherId} ending attendance in class ${classId} for ${sessionType}`);
-      
-      // Find the class
       const classDoc = await Class.findById(classId);
       if (!classDoc) {
         socket.emit('attendance:error', { message: 'Class not found' });
         return;
       }
-
-      // Check if teacher owns this class
       if (classDoc.teacherId.toString() !== teacherId) {
         socket.emit('attendance:error', { message: 'Not authorized to manage this class' });
         return;
       }
-
-      const today = new Date();
-      today.setUTCHours(0, 0, 0, 0);
-
-      // Find attendance record for today
-      const attendanceRecord = classDoc.attendanceRecords.find(record => {
-        const recordDate = new Date(record.date);
-        recordDate.setUTCHours(0, 0, 0, 0);
-        return recordDate.getTime() === today.getTime();
-      });
-
+      // Always use UTC midnight for today, but do NOT create a new record
+      const attendanceRecord = findTodayAttendanceRecord(classDoc);
       if (attendanceRecord && attendanceRecord[sessionType]) {
         attendanceRecord[sessionType].active = 'completed';
         await classDoc.save();
       }
-
-      // Broadcast to all users in the class
       io.to(`class:${classId}`).emit('attendanceEnded', {
         classId,
         sessionType,
         timestamp: new Date().toISOString(),
         message: `Attendance for ${sessionType} has been completed`
       });
-
-      socket.emit('attendance:ended', { 
+      // Notify the teacher's client to navigate away
+      socket.emit('attendance:endedAndNavigate', {
         success: true,
         classId,
         sessionType,
-        message: `Attendance for ${sessionType} ended successfully`
+        message: `Attendance for ${sessionType} ended successfully, navigate away.`
       });
-
     } catch (error) {
       console.error('Error ending attendance:', error);
-      socket.emit('attendance:error', { 
-        message: error.message || 'Failed to end attendance session'
-      });
+      socket.emit('attendance:error', { message: error.message || 'Failed to end attendance session' });
     }
   });
 

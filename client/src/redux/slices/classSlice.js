@@ -344,6 +344,7 @@ export const fetchOngoingAttendance = createAsyncThunk(
           Authorization: `Bearer ${token}`,
         },
       });
+      console.log("Ongoing attendance:", response);
       
       return response.data.data;
     } catch (error) {

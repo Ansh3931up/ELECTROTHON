@@ -94,18 +94,10 @@ export const leaveClassRoom = (classId, userId) => {
  * @param {string} teacherId - Teacher's user ID
  * @param {string} sessionType - Type of session ('lecture' or 'lab')
  */
-export const initiateAttendance = (classId, frequency, teacherId, sessionType = 'lecture') => {
+export const initiateAttendance = async(classId, frequency, teacherId, sessionType = 'lecture') => {
   if (!socket?.connected || !classId || !teacherId) return;
-  
-  // Using new naming convention (teacher:startAttendance)
-  socket.emit('teacher:startAttendance', {
-    classId,
-    teacherId,
-    sessionType
-  });
-  
-  // For backward compatibility, also emit the old event with all parameters
-  socket.emit('initiateAttendance', {
+   // For backward compatibility, also emit the old event with all parameters
+    await socket.emit('initiateAttendance', {
     classId,
     frequency,
     teacherId,
@@ -113,6 +105,17 @@ export const initiateAttendance = (classId, frequency, teacherId, sessionType = 
     timestamp: new Date().toISOString(),
     message: `Attendance check initiated by teacher for ${sessionType}`
   });
+
+
+
+  // Using new naming convention (teacher:startAttendance)
+  socket.emit('teacher:startAttendance', {
+    classId,
+    teacherId,
+    sessionType
+  });
+  
+ 
 };
 
 /**

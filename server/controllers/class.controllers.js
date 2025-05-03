@@ -314,15 +314,15 @@ export const saveDailyAttendance = async (req, res, next) => {
 
       // Convert flat arrays to objects if needed (for compatibility with schema change)
       if (Array.isArray(record.lecture)) {
-        record.lecture = { records: record.lecture, active: !markCompleted && sessionType === 'lecture' };
+        record.lecture = { records: record.lecture, active: 'completed' };
       } else if (!record.lecture) {
-        record.lecture = { records: [], active: !markCompleted && sessionType === 'lecture' };
+        record.lecture = { records: [], active: 'completed' };
       }
 
       if (Array.isArray(record.lab)) {
-        record.lab = { records: record.lab, active: !markCompleted && sessionType === 'lab' };
+        record.lab = { records: record.lab, active: 'completed' };
       } else if (!record.lab) {
-        record.lab = { records: [], active: !markCompleted && sessionType === 'lab' };
+        record.lab = { records: [], active: 'completed' };
       }
       
       // Check if this session type already has records
@@ -353,25 +353,16 @@ export const saveDailyAttendance = async (req, res, next) => {
       
       // Set active status based on markCompleted flag for this specific session type
       if (markCompleted) {
-        record[sessionType].active = false;
-        console.log(`Marking ${sessionType} session for ${date} as inactive (completed)`);
+        record[sessionType].active = 'completed';
+        console.log(`Marking ${sessionType} session for ${date} as completed`);
       }
       
     } else {
-      // Create a new record for this date with the session-specific active flag
-      const newAttendanceRecord = {
-        date: recordDate,
-        lecture: { 
-          records: sessionType === 'lecture' ? formattedAttendance : [],
-          active: sessionType === 'lecture' ? !markCompleted : true
-        },
-        lab: { 
-          records: sessionType === 'lab' ? formattedAttendance : [],
-          active: sessionType === 'lab' ? !markCompleted : true
-        }
-      };
-      
-      classDoc.attendanceRecords.push(newAttendanceRecord);
+      // Do NOT create a new record here!
+      return res.status(400).json({
+        success: false,
+        message: "No attendance session started for today. Please start attendance via the app first."
+      });
     }
 
     await classDoc.save();
@@ -456,22 +447,22 @@ export const markStudentPresentByFrequency = asyncHandler(async (req, res) => {
 
     // Convert flat arrays to objects if needed (for compatibility with schema change)
     if (Array.isArray(attendanceRecord.lecture)) {
-      attendanceRecord.lecture = { records: attendanceRecord.lecture, active: true };
+      attendanceRecord.lecture = { records: attendanceRecord.lecture, active: 'active' };
     } else if (!attendanceRecord.lecture) {
-      attendanceRecord.lecture = { records: [], active: false };
+      attendanceRecord.lecture = { records: [], active: 'completed' };
     }
 
     if (Array.isArray(attendanceRecord.lab)) {
-      attendanceRecord.lab = { records: attendanceRecord.lab, active: true };
+      attendanceRecord.lab = { records: attendanceRecord.lab, active: 'active' };
     } else if (!attendanceRecord.lab) {
-      attendanceRecord.lab = { records: [], active: false };
+      attendanceRecord.lab = { records: [], active: 'completed' };
     }
 
     // Determine which session type to use - look for the one that's active
     let sessionType = null;
     if (requestedSessionType && ['lecture', 'lab'].includes(requestedSessionType)) {
       // If a specific type is requested, use that if it's active
-      if (attendanceRecord[requestedSessionType].active) {
+      if (attendanceRecord[requestedSessionType].active === 'active') {
         sessionType = requestedSessionType;
       } else {
         return res.status(400).json({ 
@@ -480,9 +471,9 @@ export const markStudentPresentByFrequency = asyncHandler(async (req, res) => {
       }
     } else {
       // If no session type specified, look for any active session
-      if (attendanceRecord.lecture.active) {
+      if (attendanceRecord.lecture.active === 'active') {
         sessionType = 'lecture';
-      } else if (attendanceRecord.lab.active) {
+      } else if (attendanceRecord.lab.active === 'active') {
         sessionType = 'lab';
       } else {
         return res.status(400).json({ message: 'No active attendance session found' });
@@ -587,7 +578,7 @@ export const  startAttendanceSession = asyncHandler(async (req, res) => {
         todayRecord[sessionType].records.length > 0) {
       
       // If there are already records, just reactivate the session
-      todayRecord[sessionType].active = true;
+      todayRecord[sessionType].active = 'active';
       await classDoc.save();
       
       return res.status(200).json({ 
@@ -607,25 +598,25 @@ export const  startAttendanceSession = asyncHandler(async (req, res) => {
       if (Array.isArray(todayRecord.lecture)) {
         todayRecord.lecture = { 
           records: todayRecord.lecture,
-          active: sessionType === 'lecture'
+          active: sessionType === 'lecture' ? 'active' : 'completed'
         };
       } else if (!todayRecord.lecture) {
-        todayRecord.lecture = { records: [], active: sessionType === 'lecture' };
+        todayRecord.lecture = { records: [], active: sessionType === 'lecture' ? 'active' : 'completed' };
       } else {
         // Just update the active flag
-        todayRecord.lecture.active = sessionType === 'lecture';
+        todayRecord.lecture.active = sessionType === 'lecture' ? 'active' : 'completed';
       }
 
       if (Array.isArray(todayRecord.lab)) {
         todayRecord.lab = { 
           records: todayRecord.lab,
-          active: sessionType === 'lab'
+          active: sessionType === 'lab' ? 'active' : 'completed'
         };
       } else if (!todayRecord.lab) {
-        todayRecord.lab = { records: [], active: sessionType === 'lab' };
+        todayRecord.lab = { records: [], active: sessionType === 'lab' ? 'active' : 'completed' };
       } else {
         // Just update the active flag
-        todayRecord.lab.active = sessionType === 'lab';
+        todayRecord.lab.active = sessionType === 'lab' ? 'active' : 'completed';
       }
     } else {
       // Create a new attendance record for today with the specific session active
@@ -633,11 +624,11 @@ export const  startAttendanceSession = asyncHandler(async (req, res) => {
         date: today,
         lecture: { 
           records: [],
-          active: sessionType === 'lecture'
+          active: sessionType === 'lecture' ? 'active' : 'completed'
         },
         lab: { 
           records: [],
-          active: sessionType === 'lab'
+          active: sessionType === 'lab' ? 'active' : 'completed'
         }
       };
       classDoc.attendanceRecords.push(todayRecord);
@@ -723,7 +714,7 @@ export const endAttendanceSession = asyncHandler(async (req, res) => {
     }
 
     // Mark the session as inactive
-    todayRecord[sessionType].active = false;
+    todayRecord[sessionType].active = 'completed';
     await classDoc.save();
 
     // Emit to all students that attendance has ended
@@ -986,76 +977,85 @@ export const fetchAttendanceForSocket = async (classId, date, sessionType) => {
 export const getOngoingAttendance = async (req, res, next) => {
   try {
     const { classId } = req.params;
-    const { sessionType } = req.query; // 'lecture' or 'lab'
-    
+    const { sessionType } = req.query;
+
     if (!classId) {
       return next(new AppError("Class ID is required", 400));
     }
-    
-    // Find the class
+
+    // Find the class with populated student list
     const classDetails = await Class.findById(classId)
-      .populate({
-        path: 'studentList',
-        select: 'fullName email _id'
-      });
-    
+      .populate('studentList', 'fullName email')
+      .lean();
+
     if (!classDetails) {
       return next(new AppError("Class not found", 404));
     }
-    
-    // Default to lecture if no session type specified
-    const targetSessionType = sessionType || 'lecture';
-    
-    // Check if there's a record for today
-    const today = new Date();
-    today.setHours(0, 0, 0, 0); // Normalize to midnight
-    
-    // Find today's attendance record
+
+    // Get today's date in UTC
+    const now = new Date();
+    const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+
+    // Log all attendanceRecords for debugging
+    if (classDetails.attendanceRecords && classDetails.attendanceRecords.length > 0) {
+      console.log(`[getOngoingAttendance] attendanceRecords count: ${classDetails.attendanceRecords.length}`);
+      classDetails.attendanceRecords.forEach((record, idx) => {
+        const recordDate = new Date(record.date);
+        const recordDateUTC = new Date(Date.UTC(recordDate.getUTCFullYear(), recordDate.getUTCMonth(), recordDate.getUTCDate()));
+        console.log(`[getOngoingAttendance] Record #${idx} raw date:`, record.date, typeof record.date);
+        console.log(`[getOngoingAttendance] Record #${idx} UTC normalized date:`, recordDateUTC, recordDateUTC.getTime());
+        console.log(`[getOngoingAttendance] Compare recordDateUTC.getTime() === todayUTC.getTime():`, recordDateUTC.getTime() === todayUTC.getTime());
+      });
+    } else {
+      console.log("[getOngoingAttendance] No attendanceRecords found.");
+    }
+
+    // Find today's attendance record (using UTC normalization)
     const todayRecord = classDetails.attendanceRecords?.find(record => {
       const recordDate = new Date(record.date);
-      recordDate.setHours(0, 0, 0, 0);
-      return recordDate.getTime() === today.getTime();
+      const recordDateUTC = new Date(Date.UTC(recordDate.getUTCFullYear(), recordDate.getUTCMonth(), recordDate.getUTCDate()));
+      return recordDateUTC.getTime() === todayUTC.getTime();
     });
-    
+
     // Determine if the specified session is active
     const hasActiveSession = todayRecord ? 
-      (todayRecord[targetSessionType] && todayRecord[targetSessionType].active) : false;
-    
+      (todayRecord[sessionType] && todayRecord[sessionType].active === 'active') : false;
+
     // Get the active session type (lecture or lab)
     let activeSessionType = null;
     if (todayRecord) {
-      if (todayRecord.lecture && todayRecord.lecture.active) {
+      if (todayRecord.lecture && todayRecord.lecture.active === 'active') {
         activeSessionType = 'lecture';
-      } else if (todayRecord.lab && todayRecord.lab.active) {
+      } else if (todayRecord.lab && todayRecord.lab.active === 'active') {
         activeSessionType = 'lab';
       }
     }
-    
+
     // Use the active session type if no specific type was requested
     const finalSessionType = sessionType || activeSessionType || 'lecture';
-    
+
     // Initialize response structure
     let attendanceData = {
       classId,
       className: classDetails.className,
       sessionType: finalSessionType,
-      date: today,
+      date: todayUTC,
       hasActiveSession: hasActiveSession,
       activeSessionType: activeSessionType,
       studentsCount: classDetails.studentList?.length || 0,
       records: []
     };
-    
+
     // If there's a record for today with the target session type
-    if (todayRecord) {
+    if (todayRecord && todayRecord[finalSessionType]) {
       const sessionData = todayRecord[finalSessionType];
-      
-      if (sessionData && sessionData.records && sessionData.records.length > 0) {
+      console.log(`[getOngoingAttendance] Session data for ${finalSessionType}:`, sessionData);
+
+      if (sessionData.records && sessionData.records.length > 0) {
         // Format the attendance records for the response
         attendanceData.records = sessionData.records.map(record => {
           const studentId = typeof record.studentId === 'object' ? record.studentId._id : record.studentId;
           const student = classDetails.studentList.find(s => s._id.toString() === studentId.toString());
-          
           return {
             studentId,
             studentName: student?.fullName || 'Unknown Student',
@@ -1063,31 +1063,55 @@ export const getOngoingAttendance = async (req, res, next) => {
             recordedAt: record.recordedAt
           };
         });
-        
+
         // Add attendance statistics
         const presentCount = attendanceData.records.filter(r => r.status === 'present').length;
         const absentCount = attendanceData.records.filter(r => r.status === 'absent').length;
-        
         attendanceData.stats = {
           present: presentCount,
           absent: absentCount,
           total: presentCount + absentCount
         };
-        
-        attendanceData.isActive = sessionData.active || false;
+        attendanceData.isActive = sessionData.active === 'active';
+      } else {
+        // No records for this session today, return all absent
+        attendanceData.records = classDetails.studentList.map(student => ({
+          studentId: student._id,
+          studentName: student.fullName,
+          status: 'absent',
+          recordedAt: null
+        }));
+        attendanceData.stats = {
+          present: 0,
+          absent: attendanceData.records.length,
+          total: attendanceData.records.length
+        };
+        attendanceData.isActive = sessionData.active === 'active';
       }
+    } else {
+      // No record for today, return all absent
+      attendanceData.records = classDetails.studentList.map(student => ({
+        studentId: student._id,
+        studentName: student.fullName,
+        status: 'absent',
+        recordedAt: null
+      }));
+      attendanceData.stats = {
+        present: 0,
+        absent: attendanceData.records.length,
+        total: attendanceData.records.length
+      };
+      attendanceData.isActive = false;
     }
-    
-    // Return attendance data
-    res.status(200).json({
+
+    return res.status(200).json({
       success: true,
       data: attendanceData
     });
-    
   } catch (error) {
-    console.error("Error fetching ongoing attendance:", error);
-    return next(new AppError(error.message || "Failed to fetch attendance data", 500));
-    }
+    console.error('Error in getOngoingAttendance:', error);
+    return next(new AppError(error.message || 'Failed to fetch ongoing attendance', 500));
+  }
 };
 
 // Get total attendance for a student across all classes

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "react-hot-toast";
 // Icons for better visual cues
-import { FiChevronLeft, FiEdit, FiMessageSquare, FiUsers, FiX } from 'react-icons/fi';
+import { FiChevronLeft, FiEdit, FiUsers, FiX } from 'react-icons/fi';
 import { useDispatch, useSelector } from "react-redux";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
@@ -559,7 +559,7 @@ const ClassDetails = () => {
   };
 
   // Step 2: Select session type and start the attendance session
-  const handleSelectSessionType = (type) => {
+  const handleSelectSessionType = async(type) => {
     if (!currentClass?._id) {
       toast.error("Class information not loaded. Please refresh the page.");
       return;
@@ -578,7 +578,7 @@ const ClassDetails = () => {
     const loadingToastId = toast.loading("Starting attendance session...");
     
     // Start new attendance session using WebSockets
-    initiateAttendance(
+      await initiateAttendance(
       currentClass._id, 
       currentClass.frequency, 
       user.user._id, 
@@ -744,7 +744,7 @@ const ClassDetails = () => {
     if (!studentPhone || !currentClass?._id) return;
     
     // Since SMS functionality is not implemented, we'll just close the form and show a message
-    toast.info('SMS functionality is not implemented yet');
+    toast.error('SMS functionality is not implemented yet');
     setShowSMSForm(false);
     setStudentPhone("");
   };
@@ -1039,34 +1039,35 @@ const ClassDetails = () => {
         toast.dismiss(loadingToastId);
         
         if (fetchOngoingAttendance.fulfilled.match(result)) {
+          console.log("Ongoing attendance from client:", result);
           const attendanceData = result.payload;
           
-          if (attendanceData) {
-            // Update UI based on fetched data
-            setCurrentSessionType(attendanceData.sessionType);
+          if (attendanceData.records && attendanceData.records.length > 0) {
+            // Format attendance data for the UI
+            const formattedAttendance = {};
+            attendanceData.records.forEach(record => {
+              formattedAttendance[record.studentId] = record.status;
+            });
             
-            if (attendanceData.records && attendanceData.records.length > 0) {
-              // Format attendance data for the UI
-              const formattedAttendance = {};
-              attendanceData.records.forEach(record => {
-                formattedAttendance[record.studentId] = record.status;
-              });
-              
-              setCurrentDailyAttendance(formattedAttendance);
-              
-              // Set marking mode if there's active attendance
-              setIsMarkingMode(attendanceData.hasActiveSession || attendanceData.isActive);
-              setIsSelectingType(false);
-              
-              // Sort student list
-              if (currentClass?.studentList) {
-                sortStudentList(currentClass.studentList, formattedAttendance);
-              }
-              
-              toast.success(`${attendanceData.sessionType} attendance loaded`);
-            } else {
-              toast.info(`No attendance records found for ${attendanceData.sessionType} session`);
+            setCurrentDailyAttendance(formattedAttendance);
+            
+            // --- Always stay in marking mode if records exist ---
+            setIsMarkingMode(true);
+            setIsSelectingType(false);
+            
+            // Sort student list
+            if (currentClass?.studentList) {
+              sortStudentList(currentClass.studentList, formattedAttendance);
             }
+            
+            toast.success(`${attendanceData.sessionType} attendance loaded`);
+          } else {
+            // No records, fallback to initial state
+            setIsMarkingMode(false);
+            setIsSelectingType(false);
+            setCurrentSessionType(null);
+            setCurrentDailyAttendance({});
+            toast.error(`No attendance records found for ${attendanceData.sessionType} session`);
           }
         } else {
           toast.error("Failed to fetch attendance data");
@@ -1096,6 +1097,7 @@ const ClassDetails = () => {
     
     return (
       <button
+        type="button"
         onClick={() => fetchOngoingAttendanceData(currentSessionType)}
         className={`text-xs font-medium py-1 px-3 rounded transition-colors duration-150 focus:outline-none mr-2 ${
           isDarkMode 
@@ -1378,39 +1380,24 @@ const ClassDetails = () => {
                 <div className={`flex justify-between items-center p-4 border-b ${
                   isDarkMode ? 'border-gray-700' : 'border-gray-200'
                 }`}>
-                  <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-800'}`}>Generated Frequency</h2>
+                  <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-800'}`}>Special Attendance</h2>
                   <button onClick={closeFrequencyPopup} className={`${isDarkMode ? 'text-gray-400 hover:text-gray-100' : 'text-gray-500 hover:text-gray-800'}`}><FiX size={20}/></button>
                 </div>
                 <div className="p-6">
                   <div className="mb-6">
-                    <div className={`text-6xl font-mono font-bold mb-1 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
-                      {classFrequencies[currentClass._id]?.[0] || '...'}
-                    </div>
-                    <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Hz</p>
-                  </div>
-
-                  <div className="flex justify-center space-x-4 mb-6">
                     <button
                       onClick={togglePlaySound}
-                      className={`inline-flex items-center justify-center px-4 py-2 rounded-md shadow transition-colors duration-150 ${
+                      className={`inline-flex items-center justify-center px-6 py-3 rounded-md shadow-lg transition-colors duration-150 text-lg font-medium ${
                         isDarkMode 
-                          ? isPlaying ? 'bg-red-700 text-white' : 'bg-blue-700 text-white' 
-                          : isPlaying ? 'bg-red-600 text-white' : 'bg-blue-600 text-white'
+                          ? isPlaying 
+                            ? 'bg-red-700 text-white hover:bg-red-600' 
+                            : 'bg-blue-700 text-white hover:bg-blue-600' 
+                          : isPlaying 
+                            ? 'bg-red-600 text-white hover:bg-red-500' 
+                            : 'bg-blue-600 text-white hover:bg-blue-500'
                       }`}
                     >
                       {isPlaying ? 'Stop Sound' : 'Play Sound'}
-                    </button>
-
-                    <button
-                      onClick={() => setShowSMSForm(true)}
-                      className={`inline-flex items-center justify-center px-4 py-2 rounded-md shadow transition-colors duration-150 ${
-                        isDarkMode 
-                          ? 'bg-gray-700 text-gray-200 hover:bg-gray-600' 
-                          : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-                      }`}
-                    >
-                      <FiMessageSquare className="mr-1.5" />
-                      Send SMS
                     </button>
                   </div>
 
@@ -1418,8 +1405,10 @@ const ClassDetails = () => {
                   {!isClassTeacher && (
                     <button
                       onClick={handleMarkAttendanceWithFrequency}
-                      className="w-full py-2.5 px-4 bg-green-600 hover:bg-green-700 text-white font-medium rounded-md shadow transition-colors duration-150"
-                      disabled={!classFrequencies[currentClass._id]?.[0]}
+                      className={`w-full py-2.5 px-4 bg-green-600 hover:bg-green-700 text-white font-medium rounded-md shadow transition-colors duration-150 ${
+                        isPlaying ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
+                      disabled={!classFrequencies[currentClass._id]?.[0] || isPlaying}
                     >
                       Mark Me Present
                     </button>
