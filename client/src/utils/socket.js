@@ -1,7 +1,7 @@
 import { io } from 'socket.io-client';
 
 // Get API base URL from environment or default to localhost
-const API_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5014';
+const API_URL =  'https://electrothon.onrender.com';
 
 // Create Socket.io instance with connection options
 let socket;
