@@ -2,7 +2,7 @@ import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import axios from "axios";
 
 // API URL (adjust based on your backend)
-const API_URL = "http://localhost:5014/api/v1" + "/user";
+const API_URL = "https://electrothon.onrender.com/api/v1" + "/user";
 
 // Thunks for async requests
 export const loginUser = createAsyncThunk(
@@ -19,20 +19,20 @@ export const loginUser = createAsyncThunk(
   }
 );
 
-export const registerFace = createAsyncThunk(
-  "auth/registerFace",
-  async ({ faceData, userId }, { rejectWithValue }) => {
-    try {
-      const response = await axios.post(`${API_URL}/face-data`, { faceData, userId }, {
-        headers: { "Content-Type": "application/json" },
-        withCredentials: true,
-      });
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || "Failed to register face");
-    }
-  }
-);
+// export const registerFace = createAsyncThunk( 
+//   "auth/registerFace",
+//   async ({ faceData, userId }, { rejectWithValue }) => {
+//     try {
+//       const response = await axios.post(`${API_URL}/face-data`, { faceData, userId }, {
+//         headers: { "Content-Type": "application/json" },
+//         withCredentials: true,
+//       });
+//       return response.data;
+//     } catch (error) {
+//       return rejectWithValue(error.response?.data?.message || "Failed to register face");
+//     }
+//   }
+// );
 
 export const updateFaceData = createAsyncThunk(
   "auth/updateFaceData",
@@ -281,33 +281,33 @@ const authSlice = createSlice({
         state.error = action.payload;
         state.loading = false;
       })
-      .addCase(registerFace.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(registerFace.fulfilled, (state) => {
-        // Update the user with registered face data
-        if (state.user) {
-          state.user.hasFaceRegistration = true;
-          if (!state.user.faceData) {
-            state.user.faceData = {};
-          }
-          state.user.faceData.registrationStatus = 'completed';
-          state.user.faceData.lastUpdated = new Date().toISOString();
-        }
-        state.loading = false;
+      // .addCase(registerFace.pending, (state) => {
+      //   state.loading = true;
+      //   state.error = null;
+      // })
+      // .addCase(registerFace.fulfilled, (state) => {
+      //   // Update the user with registered face data
+      //   if (state.user) {
+      //     state.user.hasFaceRegistration = true;
+      //     if (!state.user.faceData) {
+      //       state.user.faceData = {};
+      //     }
+      //     state.user.faceData.registrationStatus = 'completed';
+      //     state.user.faceData.lastUpdated = new Date().toISOString();
+      //   }
+      //   state.loading = false;
         
-        // Update localStorage
-        const userData = JSON.parse(localStorage.getItem('user'));
-        if (userData && userData.user) {
-          userData.user = state.user;
-          localStorage.setItem('user', JSON.stringify(userData));
-        }
-      })
-      .addCase(registerFace.rejected, (state, action) => {
-        state.error = action.payload;
-        state.loading = false;
-      })
+      //   // Update localStorage
+      //   const userData = JSON.parse(localStorage.getItem('user'));
+      //   if (userData && userData.user) {
+      //     userData.user = state.user;
+      //     localStorage.setItem('user', JSON.stringify(userData));
+      //   }
+      // })
+      // .addCase(registerFace.rejected, (state, action) => {
+      //   state.error = action.payload;
+      //   state.loading = false;
+      // })
       .addCase(getUserProfile.pending, (state) => {
         state.loading = true;
         state.error = null;

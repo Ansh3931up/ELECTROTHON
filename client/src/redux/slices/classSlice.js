@@ -3,7 +3,7 @@ import axios from "axios";
 // import { axiosInstance } from '../../utils/axios';
 
 
-const API_URL = "http://localhost:5014/api/v1" + "/class";
+const API_URL = "https://electrothon.onrender.com/api/v1" + "/class";
 
 // Get teacher's classes
 export const getTeacherClasses = createAsyncThunk(
@@ -51,7 +51,7 @@ export const createClass = createAsyncThunk(
           'Content-Type': 'application/json', // Ensure content type is set
         },
       };
-
+      
       // Send classData and the config object with headers
       const response = await axios.post(`${API_URL}/create-class`, classData, config);
 
