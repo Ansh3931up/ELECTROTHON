@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const BASE_URL = "https://electrothon.onrender.com/api/v1";
+const BASE_URL = "http://13.127.217.5/api/v1";
 
 const axiosInstance = axios.create();
 
