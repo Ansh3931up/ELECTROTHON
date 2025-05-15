@@ -22,11 +22,11 @@ export const initializeSocket = (server) => {
       ],
       methods: ['GET', 'POST'],
       credentials: true,
-      allowedHeaders: ['Content-Type', 'Authorization'],
+      allowedHeaders: ['Content-Type', 'Authorization']
     },
     path: '/socket.io',
-    pingTimeout: 60000, // 60 second ping timeout
-    pingInterval: 25000, // 25 second ping interval
+    pingTimeout: 60000,
+    pingInterval: 25000,
     transports: ['websocket', 'polling'],
     cookie: {
       name: 'io',
@@ -34,20 +34,7 @@ export const initializeSocket = (server) => {
       sameSite: 'none',
       secure: true
     },
-    // Enable WSS in production
-    secure: process.env.NODE_ENV === 'production',
-    // Additional WebSocket options
-    wsEngine: 'ws',
-    perMessageDeflate: {
-      threshold: 2048, // Size in bytes where compression starts
-      zlibInflateOptions: {
-        chunkSize: 10 * 1024
-      },
-      zlibDeflateOptions: {
-        level: 6,
-        memLevel: 8
-      }
-    }
+    maxHttpBufferSize: 1e8 // 100 MB
   });
 
   // Store connected users and their socket IDs
