@@ -24,7 +24,9 @@ export const initializeSocket = (user) => {
       withCredentials: true,
       transports: ['websocket', 'polling'],
       path: '/socket.io',
-      timeout: 10000, // 10 second timeout
+      timeout: 20000, // Increased timeout to 20 seconds
+      secure: window.location.hostname === 'electrothon.vercel.app', // Enable secure connection in production
+      rejectUnauthorized: false // Allow self-signed certificates if using any
     });
     
     // Connection event handlers
