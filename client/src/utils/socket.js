@@ -2,12 +2,11 @@ import { io } from 'socket.io-client';
 
 // Get API base URL from environment or default to localhost
 const API_URL = window.location.hostname === 'electrothon.vercel.app' 
-  ? 'https://13.127.217.5.nip.io' // AWS backend URL
+  ? 'https://13.127.217.5.nip.io' // AWS backend URL with HTTPS
   : 'http://localhost:5014'; // Local development URL
 
 // Create Socket.io instance with connection options
 let socket;
-let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 5;
 
 /**
@@ -17,21 +16,27 @@ const MAX_RECONNECT_ATTEMPTS = 5;
  */
 export const initializeSocket = (user) => {
   if (!socket) {
-    socket = io(API_URL, {
-      reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
-      reconnectionDelay: 1000,
+    const socketOptions = {
       autoConnect: true,
       withCredentials: true,
-      transports: ['polling', 'websocket'], // Try polling first, then websocket
+      transports: ['websocket', 'polling'],
       path: '/socket.io',
-      timeout: 20000, // 20 second timeout
-      rejectUnauthorized: false // Allow self-signed certificates if using any
-    });
-    
-    // Connection event handlers
+      timeout: 20000,
+      forceNew: true,
+      reconnection: true,
+      reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      secure: true, // Enable secure connection
+      rejectUnauthorized: false, // Allow self-signed certificates
+    };
+
+    console.log('Connecting to socket server:', API_URL, socketOptions);
+    socket = io(API_URL, socketOptions);
+
+    // Add connection event handlers
     socket.on('connect', () => {
-      console.log('Socket connected to:', API_URL);
-      reconnectAttempts = 0; // Reset reconnect attempts on successful connection
+      console.log('Socket connected successfully');
       
       // Identify user to server if we have user info
       if (user?.user?._id) {
@@ -41,27 +46,13 @@ export const initializeSocket = (user) => {
         });
       }
     });
-    
-    socket.on('connect_error', (err) => {
-      console.error('Socket connection error:', err.message);
-      reconnectAttempts++;
-      
-      if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-        console.error('Max reconnection attempts reached, stopping reconnection');
-        socket.disconnect();
-      }
+
+    socket.on('connect_error', (error) => {
+      console.error('Socket connection error:', error);
     });
-    
+
     socket.on('disconnect', (reason) => {
       console.log('Socket disconnected:', reason);
-      
-      // If the disconnection wasn't initiated by the client, try to reconnect
-      if (reason === 'io server disconnect' || reason === 'transport close') {
-        if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-          console.log('Attempting to reconnect...');
-          socket.connect();
-        }
-      }
     });
     
     // Handle attendance specific events

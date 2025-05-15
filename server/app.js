@@ -44,6 +44,7 @@ app.use(
 );
 
 app.use(cookieParser());
+app.options('*', cors());
 
 app.use("/ping", function (req, res) {
   res.send("/pong");

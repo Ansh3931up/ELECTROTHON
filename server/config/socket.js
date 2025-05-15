@@ -14,6 +14,7 @@ export const initializeSocket = (server) => {
     cors: {
       origin: [
         'https://electrothon.vercel.app',
+        'http://electrothon.vercel.app',
         'http://localhost:5173',
         'http://localhost:5174',
         'https://localhost',
@@ -24,17 +25,19 @@ export const initializeSocket = (server) => {
       credentials: true,
       allowedHeaders: ['Content-Type', 'Authorization']
     },
-    path: '/socket.io',
+    transports: ['websocket', 'polling'],
+    allowEIO3: true,
+    maxHttpBufferSize: 1e8, // 100 MB
     pingTimeout: 60000,
     pingInterval: 25000,
-    transports: ['websocket', 'polling'],
+    path: '/socket.io',
+    secure: true, // Enable HTTPS
     cookie: {
       name: 'io',
       httpOnly: true,
-      sameSite: 'none',
-      secure: true
-    },
-    maxHttpBufferSize: 1e8 // 100 MB
+      secure: true,
+      sameSite: 'none'
+    }
   });
 
   // Store connected users and their socket IDs
@@ -191,37 +194,15 @@ export const initializeSocket = (server) => {
       }
     });
 
-    // Disconnect handler
-    socket.on('disconnect', () => {
-      console.log(`Socket disconnected: ${socket.id}`);
+    // Handle disconnection
+    socket.on('disconnect', (reason) => {
+      console.log(`Socket disconnected: ${socket.id}, reason: ${reason}`);
       
       // Find and remove user from users map
-      let disconnectedUserId = null;
       for (const [userId, socketId] of users.entries()) {
         if (socketId === socket.id) {
-          disconnectedUserId = userId;
           users.delete(userId);
           break;
-        }
-      }
-      
-      // Remove user from all class rooms
-      if (disconnectedUserId) {
-        for (const [classId, userSet] of classRooms.entries()) {
-          if (userSet.has(disconnectedUserId)) {
-            userSet.delete(disconnectedUserId);
-            
-            // Notify room members of departure
-            socket.to(`class:${classId}`).emit('userLeft', {
-              userId: disconnectedUserId,
-              count: userSet.size
-            });
-            
-            // Cleanup empty rooms
-            if (userSet.size === 0) {
-              classRooms.delete(classId);
-            }
-          }
         }
       }
     });
