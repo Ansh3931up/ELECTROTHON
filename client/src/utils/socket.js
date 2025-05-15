@@ -1,7 +1,7 @@
 import { io } from 'socket.io-client';
 
 // Get API base URL from environment or default to localhost
-const API_URL =  'https://13-127-217-5.nip.io';
+const API_URL =  'wss://13-127-217-5.nip.io';
 
 // Create Socket.io instance with connection options
 let socket;
