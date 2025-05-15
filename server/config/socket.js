@@ -21,7 +21,18 @@ export const initializeSocket = (server) => {
         'http://localhost',
       ],
       methods: ['GET', 'POST'],
-      credentials: true
+      credentials: true,
+      allowedHeaders: ['Content-Type', 'Authorization'],
+      transports: ['websocket', 'polling']
+    },
+    path: '/socket.io',
+    pingTimeout: 60000, // Increase ping timeout
+    pingInterval: 25000, // Increase ping interval
+    cookie: {
+      name: 'io',
+      httpOnly: true,
+      sameSite: 'none',
+      secure: true
     }
   });
 

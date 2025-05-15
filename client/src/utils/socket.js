@@ -1,10 +1,14 @@
 import { io } from 'socket.io-client';
 
 // Get API base URL from environment or default to localhost
-const API_URL =  'wss://13-127-217-5.nip.io';
+const API_URL = window.location.hostname === 'electrothon.vercel.app' 
+  ? 'http://13.127.217.5.nip.io' // AWS backend URL
+  : 'http://localhost:5014'; // Local development URL
 
 // Create Socket.io instance with connection options
 let socket;
+let reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 5;
 
 /**
  * Initialize and connect to Socket.io server
@@ -14,15 +18,19 @@ let socket;
 export const initializeSocket = (user) => {
   if (!socket) {
     socket = io(API_URL, {
-      reconnectionAttempts: 5,
+      reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
       reconnectionDelay: 1000,
       autoConnect: true,
       withCredentials: true,
+      transports: ['websocket', 'polling'],
+      path: '/socket.io',
+      timeout: 10000, // 10 second timeout
     });
     
     // Connection event handlers
     socket.on('connect', () => {
-      console.log('Socket connected');
+      console.log('Socket connected to:', API_URL);
+      reconnectAttempts = 0; // Reset reconnect attempts on successful connection
       
       // Identify user to server if we have user info
       if (user?.user?._id) {
@@ -35,10 +43,40 @@ export const initializeSocket = (user) => {
     
     socket.on('connect_error', (err) => {
       console.error('Socket connection error:', err.message);
+      reconnectAttempts++;
+      
+      if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+        console.error('Max reconnection attempts reached, stopping reconnection');
+        socket.disconnect();
+      }
     });
     
     socket.on('disconnect', (reason) => {
       console.log('Socket disconnected:', reason);
+      
+      // If the disconnection wasn't initiated by the client, try to reconnect
+      if (reason === 'io server disconnect' || reason === 'transport close') {
+        if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+          console.log('Attempting to reconnect...');
+          socket.connect();
+        }
+      }
+    });
+    
+    // Handle attendance specific events
+    socket.on('attendance:error', (data) => {
+      console.error('Attendance error:', data);
+      // You can add custom error handling here if needed
+    });
+    
+    socket.on('attendanceStarted', (data) => {
+      console.log('Attendance started:', data);
+      // You can add custom handling here if needed
+    });
+    
+    socket.on('attendanceEnded', (data) => {
+      console.log('Attendance ended:', data);
+      // You can add custom handling here if needed
     });
   }
   

@@ -158,6 +158,47 @@ export const handleAttendanceSocket = (socket, io) => {
 
       // Check if the session is already active
       if (attendanceRecord[sessionType] && attendanceRecord[sessionType].active === 'active') {
+        // If there's an active session but it's stale (more than 2 hours old), end it
+        const lastRecordTime = attendanceRecord[sessionType].records.length > 0 
+          ? new Date(attendanceRecord[sessionType].records[attendanceRecord[sessionType].records.length - 1].recordedAt)
+          : new Date(0);
+        
+        const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+        
+        if (lastRecordTime < twoHoursAgo) {
+          // Session is stale, mark it as completed
+          attendanceRecord[sessionType].active = 'completed';
+          await classDoc.save();
+          
+          // Start a new session
+          attendanceRecord[sessionType].active = 'active';
+          attendanceRecord[sessionType].records = []; // Clear old records
+          
+          // Initialize with all students marked as absent
+          const studentList = classDoc.studentList || [];
+          for (const studentId of studentList) {
+            attendanceRecord[sessionType].records.push({
+              studentId: new mongoose.Types.ObjectId(studentId),
+              status: 'absent',
+              recordedAt: new Date(),
+              recordedBy: new mongoose.Types.ObjectId(teacherId)
+            });
+          }
+          
+          await classDoc.save();
+          
+          // Emit the new session start
+          io.to(`class:${classId}`).emit('attendanceStarted', {
+            classId,
+            teacherId,
+            sessionType,
+            timestamp: new Date().toISOString(),
+            message: `New ${sessionType} attendance session started`
+          });
+          
+          return;
+        }
+        
         socket.emit('attendance:error', { message: `${sessionType} attendance is already active.` });
         return;
       }
