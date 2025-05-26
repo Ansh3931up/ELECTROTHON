@@ -2,7 +2,7 @@ import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import axios from "axios";
 
 // API URL (adjust based on your backend)
-const API_URL = "https://13-127-217-5.nip.io/api/v1" + "/user";
+const API_URL = "https://35-154-255-213.nip.io/api/v1" + "/user";
 
 // Thunks for async requests
 export const loginUser = createAsyncThunk(

@@ -2,7 +2,7 @@ import { io } from 'socket.io-client';
 
 // Get API base URL from environment or default to localhost
 const API_URL = window.location.hostname === 'electrothon.vercel.app' 
-  ? 'https://13-127-217-5.nip.io' // AWS backend URL with HTTPS
+  ? 'https://35-154-255-213.nip.io' // AWS backend URL with HTTPS
   : 'http://localhost:5014'; // Local development URL
 
 // Create Socket.io instance with connection options

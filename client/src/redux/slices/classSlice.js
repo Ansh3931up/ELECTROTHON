@@ -3,7 +3,7 @@ import axios from "axios";
 // import { axiosInstance } from '../../utils/axios';
 
 
-const API_URL = "https://13-127-217-5.nip.io/api/v1" + "/class";
+const API_URL = "https://35-154-255-213.nip.io/api/v1" + "/class";
 
 // Get teacher's classes
 export const getTeacherClasses = createAsyncThunk(
